@@ -68,7 +68,9 @@
 
   // ── Pre-cache ──
   let CSS_URL = '';
+  let CAMERA_URL = '';
   try { CSS_URL = chrome.runtime.getURL('styles/overlay.css'); } catch (_) {}
+  try { CAMERA_URL = chrome.runtime.getURL('camera.html'); } catch (_) {}
   function safeSet(data) { try { chrome.storage.local.set(data); } catch (_) {} }
 
   let shadowRoot = null;

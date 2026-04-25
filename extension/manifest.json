@@ -48,6 +48,7 @@
         "styles/overlay.css",
         "camera.html",
         "assets/*",
+        "assets/models/*",
         "assets/recaptcha-logo/RecaptchaLogo.svg.png",
         "fonts/*"
       ],

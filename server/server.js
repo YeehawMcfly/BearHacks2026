@@ -145,12 +145,14 @@ app.get('/api/chess/puzzle', async (req, res) => {
     if (!pgn || initialPly == null || !solution?.length) throw new Error('Bad Lichess response');
 
     const chess = new Chess();
-    const moves = pgn
+    const moves = data.game.pgn
       .replace(/\{[^}]*\}/g, '')   // strip comments
       .replace(/\d+\./g, '')        // strip move numbers
       .replace(/\$\d+/g, '')        // strip NAG annotations
       .trim().split(/\s+/).filter(m => m && m !== '--' && !m.includes('*') && !m.includes('1-') && !m.includes('0-'));
-    for (let i = 0; i < Math.min(initialPly, moves.length); i++) {
+    // Lichess initialPly is 1 past the puzzle start — replay initialPly-1 moves
+    const replayTo = Math.max(0, initialPly - 1);
+    for (let i = 0; i < Math.min(replayTo, moves.length); i++) {
       try { chess.move(moves[i]); } catch (_) { break; }
     }
     const fen = chess.fen();
@@ -161,10 +163,13 @@ app.get('/api/chess/puzzle', async (req, res) => {
     let isMate = false;
     try {
       const test = new Chess(fen);
-      test.move({ from: fromAlg, to: toAlg, promotion: first[4] || 'q' });
+      // Only pass promotion if the UCI move includes a promotion char (5th char)
+      const moveOpts = { from: fromAlg, to: toAlg };
+      if (first.length === 5) moveOpts.promotion = first[4];
+      test.move(moveOpts);
       isMate = test.isCheckmate();
     } catch (e) {
-      throw new Error(`Solution move ${fromAlg}${toAlg} illegal: ${e.message}`);
+      throw new Error(`Move ${fromAlg}${toAlg} illegal: ${e.message}`);
     }
 
     const hint = themes.includes('backRankMate') ? 'Back rank is weak...' :
