@@ -229,7 +229,7 @@
     // Announce level
     await typeText(LEVEL_INTROS[index], 'rt-sgt-text');
     window.ReverseTest.Audio.speak(LEVEL_INTROS[index], index >= 2 ? 'aggressive' : 'angry');
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 500));
 
     // Start tracking
     window.ReverseTest.Goldilocks.startLevel();
@@ -300,7 +300,7 @@
         }
       });
 
-      await new Promise(r => setTimeout(r, 2500));
+      await new Promise(r => setTimeout(r, 800));
 
       // Clean up and move on
       mod.cleanup();
