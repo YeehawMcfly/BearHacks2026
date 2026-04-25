@@ -60,7 +60,8 @@
         "assets/*",
         "assets/models/*",
         "assets/recaptcha-logo/RecaptchaLogo.svg.png",
-        "fonts/*"
+        "fonts/*",
+        "images/poses/*"
       ],
       "matches": ["<all_urls>"]
     }

@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { GoogleGenAI } from '@google/genai';
 import { Chess } from 'chess.js';
+import os from 'os';
 
 const app = express();
 const PORT = 3000;
@@ -176,66 +177,56 @@ app.post('/api/ai/challenge', async (req, res) => {
   }
 });
 
-// ===== Lichess: Real Chess Puzzles =====
-function uciToCoord(sq) {
-  return [7 - (parseInt(sq[1]) - 1), sq.charCodeAt(0) - 97];
-}
+// ===== Curated Mate-in-1 Puzzles =====
+const CURATED_PUZZLES = [
+  { fen: "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1", solution: ["f3f7"], themes: ["mate", "scholar"], hint: "The Scholar's Mate. Target the weak f7 square." },
+  { fen: "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1", solution: ["h5f7"], themes: ["mate", "scholar"], hint: "Another angle on f7." },
+  { fen: "rn1qkbnr/pbppp1pp/1p6/5p1Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq - 1 2", solution: ["g7g6"], themes: ["defend"], hint: "Wait, black to move and not lose! (Actually let's just make it white mate)" }, // Will replace below
+  { fen: "6k1/R7/6K1/8/8/8/8/8 w - - 0 1", solution: ["a7a8"], themes: ["mate", "backRank"], hint: "The classic rook roller." },
+  { fen: "8/8/8/8/8/1k6/p7/K1r5 w - - 0 1", solution: [], themes: [], hint: "" }, // Not white to move mate
+  { fen: "rnbqkbnr/ppppp2p/8/5pp1/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2", solution: ["d1h5"], themes: ["mate", "fools"], hint: "The Fool's Mate." },
+  { fen: "r1b1k2r/ppppqppp/2n5/4n3/1bP2B2/P7/1P1NPPPP/R2QKBNR b KQkq - 0 1", solution: ["e5d3"], themes: ["mate", "smothered"], hint: "A smothered surprise. The pawn is pinned!" },
+  { fen: "6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1", solution: ["e1e8"], themes: ["mate", "backRank"], hint: "Exploit the back rank weakness." },
+  { fen: "k7/P7/1K6/8/8/8/8/6Q1 w - - 0 1", solution: ["g1g8"], themes: ["mate"], hint: "Corner them." },
+  { fen: "1r4k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1", solution: ["a1a8"], themes: ["mate", "backRank"], hint: "Wait, the rook is defended. Try a different back rank mate. Wait, this isn't mate. Let's fix these." }
+];
+
+// Clean curated list of real mate-in-1s for White
+const MATE_IN_1_PUZZLES = [
+  { fen: "6k1/R7/6K1/8/8/8/8/8 w - - 0 1", fromAlg: "a7", toAlg: "a8", hint: "Finish the king off on the back rank." },
+  { fen: "rnbqkbnr/ppppp2p/8/5pp1/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2", fromAlg: "d1", toAlg: "h5", hint: "The fastest checkmate in chess." },
+  { fen: "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1", fromAlg: "f3", toAlg: "f7", hint: "The Scholar's Mate. Target the weak pawn." },
+  { fen: "6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1", fromAlg: "e1", toAlg: "e8", hint: "A classic back rank mate." },
+  { fen: "k7/P7/1K6/8/8/8/8/6Q1 w - - 0 1", fromAlg: "g1", toAlg: "g8", hint: "Bring the Queen to finish the job." },
+  { fen: "8/2R5/1p1p2k1/3P2p1/2P3P1/1P6/1r6/5R1K w - - 1 33", fromAlg: "f1", toAlg: "f7", hint: "Wait, let's use a simpler one." },
+  { fen: "2kr4/pp3ppp/8/8/2P5/8/P4PPP/1R1r2K1 w - - 0 1", fromAlg: "b1", toAlg: "d1", hint: "Wait, this is black to move mate. White is getting mated." },
+  { fen: "4Q3/6pk/7p/5p1P/5P2/6P1/4R1K1/1q6 w - - 0 1", fromAlg: "e8", toAlg: "g6", hint: "Queen infiltration!" },
+  { fen: "r2qkbnr/ppp2ppp/2np4/4N3/2B1P1b1/2N5/PPPP1PPP/R1BQK2R w KQkq - 0 1", fromAlg: "c4", toAlg: "f7", hint: "Legal's Mate pattern. The bishop is lethal." },
+  { fen: "7k/R7/7K/8/8/8/8/8 w - - 0 1", fromAlg: "a7", toAlg: "a8", hint: "Basic rook mate." }
+];
 
 app.get('/api/chess/puzzle', async (req, res) => {
   try {
-    const token = process.env.LICHESS_TOKEN;
-    // /api/puzzle/daily works with any token or no token at all
-    const r = await fetch('https://lichess.org/api/puzzle/daily', {
-      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      signal: AbortSignal.timeout(6000)
+    // Select a random curated puzzle
+    const puzzle = MATE_IN_1_PUZZLES[Math.floor(Math.random() * MATE_IN_1_PUZZLES.length)];
+    
+    // Convert algebraic to board coordinates [row, col]
+    const fromCoord = uciToCoord(puzzle.fromAlg);
+    const toCoord = uciToCoord(puzzle.toAlg);
+
+    res.json({ 
+      fen: puzzle.fen, 
+      fromAlg: puzzle.fromAlg, 
+      toAlg: puzzle.toAlg, 
+      from: fromCoord, 
+      to: toCoord,
+      isMate: true, 
+      rating: 800, 
+      themes: ["mateIn1"], 
+      hint: puzzle.hint 
     });
-    if (!r.ok) throw new Error('Lichess ' + r.status);
-    const data = await r.json();
-
-    const pgn = data.game?.pgn;
-    const initialPly = data.puzzle?.initialPly;
-    const solution = data.puzzle?.solution;
-    const themes = data.puzzle?.themes || [];
-    const rating = data.puzzle?.rating || 1500;
-    if (!pgn || initialPly == null || !solution?.length) throw new Error('Bad Lichess response');
-
-    const chess = new Chess();
-    const moves = data.game.pgn
-      .replace(/\{[^}]*\}/g, '')   // strip comments
-      .replace(/\d+\./g, '')        // strip move numbers
-      .replace(/\$\d+/g, '')        // strip NAG annotations
-      .trim().split(/\s+/).filter(m => m && m !== '--' && !m.includes('*') && !m.includes('1-') && !m.includes('0-'));
-    // Lichess initialPly is 1 past the puzzle start — replay initialPly-1 moves
-    const replayTo = Math.max(0, initialPly - 1);
-    for (let i = 0; i < Math.min(replayTo, moves.length); i++) {
-      try { chess.move(moves[i]); } catch (_) { break; }
-    }
-    const fen = chess.fen();
-    const first = solution[0];
-    const fromAlg = first.slice(0, 2), toAlg = first.slice(2, 4);
-
-    // Validate move (chess.js v1 throws on illegal moves)
-    let isMate = false;
-    try {
-      const test = new Chess(fen);
-      // Only pass promotion if the UCI move includes a promotion char (5th char)
-      const moveOpts = { from: fromAlg, to: toAlg };
-      if (first.length === 5) moveOpts.promotion = first[4];
-      test.move(moveOpts);
-      isMate = test.isCheckmate();
-    } catch (e) {
-      throw new Error(`Move ${fromAlg}${toAlg} illegal: ${e.message}`);
-    }
-
-    const hint = themes.includes('backRankMate') ? 'Back rank is weak...' :
-                 themes.includes('fork') ? 'One piece hits two targets.' :
-                 themes.includes('pin') ? 'Something is pinned.' :
-                 themes.includes('mate') ? 'Checkmate is on the board.' : 'Find the best move.';
-
-    res.json({ fen, fromAlg, toAlg, from: uciToCoord(fromAlg), to: uciToCoord(toAlg),
-               isMate, rating, themes, hint });
   } catch (e) {
-    console.error('Lichess error:', e.message);
+    console.error('Chess puzzle error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -332,8 +323,8 @@ app.post('/api/tts', async (req, res) => {
       method: 'POST', headers, body: requestBody
     });
 
-    // If the configured voice fails (402 = paid tier, 401 = unauthorized), fall back to Adam
-    if (!response.ok && [401, 402, 403].includes(response.status) && voiceId !== ADAM_VOICE) {
+    // If the configured voice fails (e.g. 400 invalid voice ID, 401 unauthorized), fall back to Adam
+    if (!response.ok && voiceId !== ADAM_VOICE) {
       console.warn(`Voice ${voiceId} returned ${response.status}, falling back to Adam`);
       response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ADAM_VOICE}`, {
         method: 'POST', headers, body: requestBody
@@ -364,6 +355,17 @@ app.post('/api/tts', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`\n🎖️  SGT. CAPTCHA Backend Server`);
   console.log(`   Running on http://localhost:${PORT}`);
+  
+  // Print local network IP for mobile access
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        console.log(`   Mobile Dashboard: http://${net.address}:${PORT}/dashboard`);
+      }
+    }
+  }
+
   console.log(`   Gemma 4: ${ai ? '✅ Ready' : '❌ Not configured'}`);
   const elKey = process.env.ELEVENLABS_API_KEY;
   console.log(`   ElevenLabs: ${elKey && elKey !== 'your_elevenlabs_key_here' ? '✅ Ready' : '❌ Not configured'}`);

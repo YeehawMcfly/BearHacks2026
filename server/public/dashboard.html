@@ -79,6 +79,15 @@
     .chart-label { position: absolute; top: 0; left: 0; font-size: 10px; color: var(--dim); }
     
     .panel.tall { grid-row: span 2; }
+    
+    @media (max-width: 900px) {
+      .grid { display: flex; flex-direction: column; }
+      body { height: auto; overflow: auto; }
+      .panel { min-height: 250px; }
+      .heatmap-container { min-height: 300px; }
+      h1 { font-size: 20px; }
+      .metrics-grid { grid-template-columns: 1fr 1fr; }
+    }
   </style>
 </head>
 <body>

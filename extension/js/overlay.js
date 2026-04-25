@@ -357,34 +357,69 @@
     safeSet({ captchaState: 'banned', banReason: reason });
   }
 
-  function showSuccessScreen() {
+  async function showSuccessScreen() {
     const overlay = shadowRoot.getElementById('rt-overlay');
     if (!overlay) return;
-    window.ReverseTest.Audio.sfx.success();
-    window.ReverseTest.Audio.speak("Fine. You may enter. But I will be watching. ALWAYS watching.", 'grudging');
 
-    pushDashboardEvent(`User passed all levels successfully.`, 'system');
-    
-    if (window.ReverseTest.Particles) {
-      window.ReverseTest.Particles.spawn('success', shadowRoot);
-    }
+    pushDashboardEvent(`User passed all levels. Generating final debrief...`, 'system');
 
+    // Create container
     const success = document.createElement('div');
     success.className = 'rt-success-screen';
     success.innerHTML = `
-      <div class="rt-success-badge">🛡️</div>
-      <div class="rt-success-text">VERIFIED HUMAN</div>
-      <div class="rt-success-sub">
-        Congratulations, you have been deemed acceptably human.<br>
-        SGT. CAPTCHA will be watching. Always.
-      </div>
-      <div style="font-size:11px;color:var(--text-dim);margin-top:20px;">
-        This overlay will disappear in 3 seconds...
+      <div class="rt-success-badge" id="rt-success-badge" style="display:none">🛡️</div>
+      <div class="rt-success-text" id="rt-success-text" style="display:none">VERIFIED HUMAN</div>
+      <div class="rt-success-sub" id="rt-debrief-text">Compiling final behavioral analysis...</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:20px;display:none" id="rt-success-footer">
+        This overlay will disappear in 5 seconds...
       </div>
     `;
     overlay.appendChild(success);
+
+    const behaviorData = window.ReverseTest.Goldilocks.getBehaviorData();
+    let debriefText = "You passed. But I'll be watching you. ALWAYS watching.";
+    try {
+      const resp = await window.ReverseTest.API.getInsult({
+        level: 99, // indicates final
+        action: 'pass',
+        emotion: 'grudging',
+        suspicion: behaviorData.suspicionScore,
+        elapsed: behaviorData.totalTime,
+        behavior: behaviorData
+      });
+      if (resp) debriefText = resp;
+    } catch (e) {
+      console.warn("Gemma debrief fallback used");
+    }
+
+    const debriefEl = shadowRoot.getElementById('rt-debrief-text');
+    if (debriefEl) debriefEl.innerHTML = '';
+    
+    // Play voice and type the debrief
+    const audioPromise = window.ReverseTest.Audio.speak(debriefText, 'grudging');
+    await typeText(debriefText, 'rt-debrief-text', 2);
+    
+    const race = await Promise.race([
+      audioPromise,
+      new Promise(r => setTimeout(() => r('timeout'), 600))
+    ]);
+    if (race !== 'timeout') await window.ReverseTest.Audio.waitForAudio();
+
+    // Now show the actual success badge
+    window.ReverseTest.Audio.sfx.success();
+    const badge = shadowRoot.getElementById('rt-success-badge');
+    const title = shadowRoot.getElementById('rt-success-text');
+    const footer = shadowRoot.getElementById('rt-success-footer');
+    if (badge) badge.style.display = 'block';
+    if (title) title.style.display = 'block';
+    if (footer) footer.style.display = 'block';
+
+    if (window.ReverseTest.Particles) {
+      window.ReverseTest.Particles.spawn('success', shadowRoot);
+    }
+    
     safeSet({ captchaState: 'passed' });
-    setTimeout(() => { overlayEl?.remove(); }, 3000);
+    setTimeout(() => { overlayEl?.remove(); }, 5000);
   }
 
   async function runIntro() {
@@ -503,51 +538,22 @@
           showNormalText("Incorrect. Please try again.");
           window.ReverseTest.Audio.sfx.error();
         }
-      } else {
-        // Military reaction — stop stale audio, speak + type in sync
-        window.ReverseTest.Audio.stop();
-        const passLine = result.humanFailure
-          ? "Acceptable human failure. You failed like a true organic being."
-          : (PASS_LINES[index % PASS_LINES.length]);
-        const failLine = FAIL_LINES[Math.min(index, FAIL_LINES.length - 1)];
-        const fallback = (result.passed || result.humanFailure) ? passLine : failLine;
-
-        // ── LIVE GEMMA COMMENTARY WITH BEHAVIOR DATA ──
-        const actionStr = (result.passed || result.humanFailure) ? 'pass' : 'fail';
-        const behaviorData = window.ReverseTest.Goldilocks.getBehaviorData();
-        
-        let reactionText = fallback;
-        try {
-          reactionText = await window.ReverseTest.API.getInsult({
-            level: index + 1,
-            action: actionStr,
-            emotion,
-            suspicion: evaluation.suspicionScore,
-            elapsed: evaluation.elapsed,
-            behavior: behaviorData
-          });
-        } catch (e) {
-          console.warn("Gemma pass/fail fallback used");
-        }
-
-        const reactionAudio = window.ReverseTest.Audio.speak(reactionText, emotion);
-        await typeText(reactionText, 'rt-sgt-text', Math.min(index, 4));
-
-        // Wait up to 600ms for audio — if started, wait for it to finish
-        const race = await Promise.race([
-          reactionAudio,
-          new Promise(r => setTimeout(() => r('timeout'), 600))
-        ]);
-        if (race !== 'timeout') await window.ReverseTest.Audio.waitForAudio();
-
+        // No blocking audio or API call for pass/fail. Just trigger sounds and instantly transition!
         if (result.passed || result.humanFailure) {
           window.ReverseTest.Audio.sfx.success();
+          // Fire off a background insult but don't wait for it
+          const passLine = result.humanFailure
+            ? "Acceptable human failure. You failed like a true organic being."
+            : (PASS_LINES[index % PASS_LINES.length]);
+          typeText(passLine, 'rt-sgt-text', Math.min(index, 4));
         } else {
           window.ReverseTest.Audio.sfx.error();
+          const failLine = FAIL_LINES[Math.min(index, FAIL_LINES.length - 1)];
+          typeText(failLine, 'rt-sgt-text', Math.min(index, 4));
         }
       }
 
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 400)); // Just a tiny visual buffer
 
       mod.cleanup();
       if (result.passed || result.humanFailure) {

@@ -9,6 +9,8 @@
 (function () {
   let currentAudio = null;
 
+  let currentUtterance = null; // For Web Speech API fallback
+
   function playUrl(url) {
     return new Promise((resolve) => {
       stop(); // kill anything playing
@@ -21,10 +23,29 @@
     });
   }
 
+  function playFallbackSpeech(text) {
+    return new Promise((resolve) => {
+      stop();
+      if (!window.speechSynthesis) return resolve(null);
+      const utterance = new SpeechSynthesisUtterance(text);
+      currentUtterance = utterance;
+      utterance.rate = 1.1; // Slightly faster for the drill sergeant
+      utterance.pitch = 0.8; // Deeper pitch
+      
+      utterance.onend = () => { if (currentUtterance === utterance) currentUtterance = null; resolve(utterance); };
+      utterance.onerror = () => { if (currentUtterance === utterance) currentUtterance = null; resolve(null); };
+      window.speechSynthesis.speak(utterance);
+    });
+  }
+
   function stop() {
     if (currentAudio) {
       try { currentAudio.pause(); currentAudio.currentTime = 0; } catch (_) {}
       currentAudio = null;
+    }
+    if (currentUtterance && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      currentUtterance = null;
     }
   }
 
@@ -34,13 +55,27 @@
     // Cancel any currently playing audio immediately
     stop();
     const url = await window.ReverseTest.API.getTTS(text, emotion).catch(() => null);
-    if (!url) return null;
+    if (!url) {
+      // Fallback to robotic browser voice if ElevenLabs fails
+      return playFallbackSpeech(text);
+    }
     // Don't await playback — caller decides
     return playUrl(url);
   }
 
   // Waits for the current audio to finish (if any)
   function waitForAudio() {
+    if (currentUtterance && window.speechSynthesis && window.speechSynthesis.speaking) {
+      return new Promise(resolve => {
+        const check = setInterval(() => {
+          if (!window.speechSynthesis.speaking) {
+            clearInterval(check);
+            resolve();
+          }
+        }, 100);
+      });
+    }
+
     if (!currentAudio || currentAudio.ended || currentAudio.paused) return Promise.resolve();
     return new Promise(resolve => {
       const a = currentAudio;

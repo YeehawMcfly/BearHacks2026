@@ -69,14 +69,9 @@
               <div class="rt-gesture-status" id="rt-body-status">Perform: ${currentAction.name}</div>
             </div>
             
-            <!-- Reference Animation -->
-            <div class="rt-reference-anim rt-anim-${currentAction.name.replace(/\s+/g, '-').toLowerCase()}">
-              <div class="stick-head"></div>
-              <div class="stick-torso"></div>
-              <div class="stick-arm-l"></div>
-              <div class="stick-arm-r"></div>
-              <div class="stick-leg-l"></div>
-              <div class="stick-leg-r"></div>
+            <!-- Reference Animation Schematic -->
+            <div class="rt-reference-anim rt-schematic-wrap">
+              <img src="${chrome.runtime.getURL('images/poses/' + currentAction.name.toLowerCase().replace(/\s+/g, '_') + '.png')}" class="rt-pose-schematic">
             </div>
 
             <div id="rt-body-yell" style="position:absolute;top:8px;left:8px;right:8px;

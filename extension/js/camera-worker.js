@@ -270,70 +270,23 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
     return 0;
   }
 
-  // ── JUMPING JACKS: count arm up/down CYCLES ──
-  // A jumping jack = arms go UP then come back DOWN. We count transitions.
+  // ── JUMPING JACKS: Arms up ──
+  // A jumping jack = hold arms above head for a sustained period.
   if (g.includes('JUMPING') || g.includes('JACK')) {
     if (pl) {
       const lWrist = pl[15], rWrist = pl[16];
       const lShoulder = pl[11], rShoulder = pl[12];
       // Check if BOTH arms are above shoulders (the "up" position)
-      const armsUp = lWrist.y < lShoulder.y - 0.03 && rWrist.y < rShoulder.y - 0.03;
-      // Check if arms are at rest (below shoulders)
-      const armsDown = lWrist.y > lShoulder.y + 0.03 && rWrist.y > rShoulder.y + 0.03;
-
-      if (armsUp && !jjArmsWereUp) {
-        // Transition: arms went UP — half a cycle
-        jjArmsWereUp = true;
-      } else if (armsDown && jjArmsWereUp) {
-        // Transition: arms came DOWN — complete cycle!
-        jjArmsWereUp = false;
-        jjCycles++;
-        console.log(`[JJ] Cycle ${jjCycles} completed`);
-      }
-
-      // Give credit: need at least 2 complete cycles
-      // Once cycling, give continuous credit during the motion
-      if (jjCycles >= 2) return 1.0;
-      if (armsUp && jjCycles >= 1) return 1.0; // mid-cycle after first completion
-      return 0;
+      if (lWrist.y < lShoulder.y - 0.05 && rWrist.y < rShoulder.y - 0.05) return 1.0;
     }
     return 0;
   }
 
-  // ── SQUAT: full up-down CYCLES required ──
-  // Must squat down (hip drops toward knee) then stand back up. Repeat 3x.
+  // ── SQUAT: hips drop to knee level ──
   if (g.includes('SQUAT')) {
     if (pl) {
-      const lHip = pl[23], rHip = pl[24];
-      const lKnee = pl[25], rKnee = pl[26];
-      const hipY = (lHip.y + rHip.y) / 2;
-      const kneeY = (lKnee.y + rKnee.y) / 2;
-      const lShoulder = pl[11], rShoulder = pl[12];
-      const shoulderY = (lShoulder.y + rShoulder.y) / 2;
-
-      // Standing height reference: distance from shoulder to knee
-      const fullHeight = kneeY - shoulderY;
-      // Hip-to-knee ratio: 0 = hip at shoulder level (standing tall), 1 = hip at knee level
-      const hipRatio = (hipY - shoulderY) / (fullHeight || 1);
-
-      // Standing: hip is in upper 55% of body (hipRatio < 0.55)
-      const isStanding = hipRatio < 0.55;
-      // Squatting: hip drops to lower 70%+ (hipRatio > 0.70) — reasonable depth, not sitting
-      const isSquatting = hipRatio > 0.70;
-
-      if (squatPhase === 'standing' && isSquatting) {
-        squatPhase = 'squatting';
-        console.log(`[SQUAT] Down phase detected (ratio: ${hipRatio.toFixed(2)})`);
-      } else if (squatPhase === 'squatting' && isStanding) {
-        squatPhase = 'standing';
-        squatCycles++;
-        console.log(`[SQUAT] Cycle ${squatCycles}/${SQUAT_REQUIRED_CYCLES} completed`);
-      }
-
-      // Give credit once enough cycles done, or mid-cycle after threshold
-      if (squatCycles >= SQUAT_REQUIRED_CYCLES) return 1.0;
-      if (squatCycles >= SQUAT_REQUIRED_CYCLES - 1 && isSquatting) return 1.0; // mid-final-cycle
-      return 0;
+      const hip = pl[24], knee = pl[26];
+      return (hip.y > knee.y - 0.06) ? 1.0 : 0;
     }
     return 0;
   }
@@ -376,55 +329,19 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
     return 0;
   }
 
-  // ── MARCH: alternating leg lifts with step counting ──
-  // Tracks left/right knee lifts alternating. Also checks arm swing.
+  // ── MARCH: High knee hold logic ──
+  // Check if either knee is lifted significantly higher than the other leg
   if (g.includes('MARCH')) {
     if (pl) {
       const lKnee = pl[25], rKnee = pl[26];
-      const lAnkle = pl[27], rAnkle = pl[28];
       const lHip = pl[23], rHip = pl[24];
-      const lWrist = pl[15], rWrist = pl[16];
-
-      // Knee lift detection: knee rises significantly relative to hip
-      // In normalized coords, y increases downward, so a lifted knee has lower y
-      const lHipToKnee = lKnee.y - lHip.y; // normally positive (knee below hip)
+      const lHipToKnee = lKnee.y - lHip.y; 
       const rHipToKnee = rKnee.y - rHip.y;
+      
+      const leftLifted = lHipToKnee < rHipToKnee - 0.05;
+      const rightLifted = rHipToKnee < lHipToKnee - 0.05;
 
-      // Also check ankle lift relative to the other ankle
-      const ankleDiff = Math.abs(lAnkle.y - rAnkle.y);
-
-      // A "step" is when one knee lifts notably higher than the other
-      // Threshold: one knee-hip distance is notably shorter (knee lifted)
-      const leftLifted = lHipToKnee < rHipToKnee - 0.04 && ankleDiff > 0.03;
-      const rightLifted = rHipToKnee < lHipToKnee - 0.04 && ankleDiff > 0.03;
-
-      // Optional: arm swing check (opposite arm forward when leg lifts)
-      // Not strictly required but gives bonus confidence
-      const armSwing = Math.abs(lWrist.y - rWrist.y) > 0.03;
-
-      if (leftLifted && marchLastLegUp !== 'left') {
-        if (marchLastLegUp === 'right') {
-          marchSteps++;
-          console.log(`[MARCH] Step ${marchSteps}/${MARCH_REQUIRED_STEPS} (L)${armSwing ? ' +arm' : ''}`);
-        }
-        marchLastLegUp = 'left';
-      } else if (rightLifted && marchLastLegUp !== 'right') {
-        if (marchLastLegUp === 'left') {
-          marchSteps++;
-          console.log(`[MARCH] Step ${marchSteps}/${MARCH_REQUIRED_STEPS} (R)${armSwing ? ' +arm' : ''}`);
-        }
-        marchLastLegUp = 'right';
-      }
-
-      // First detection: set initial leg without counting a step
-      if (marchLastLegUp === null) {
-        if (leftLifted) marchLastLegUp = 'left';
-        else if (rightLifted) marchLastLegUp = 'right';
-      }
-
-      if (marchSteps >= MARCH_REQUIRED_STEPS) return 1.0;
-      if (marchSteps >= MARCH_REQUIRED_STEPS - 1 && (leftLifted || rightLifted)) return 1.0;
-      return 0;
+      return (leftLifted || rightLifted) ? 1.0 : 0;
     }
     return 0;
   }
