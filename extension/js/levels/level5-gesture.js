@@ -2,12 +2,9 @@
  * Level 5 — Body/Hand Gesture CAPTCHA
  * "PROVE YOUR MEAT BODY IS REAL!"
  *
- * Uses getUserMedia() directly (content scripts have full webcam access).
- * No external CDN or bridge needed.
- * Gesture detection: simple motion analysis via canvas pixel diff.
- *
- * Challenge: perform a specific physical gesture (wave, thumbs up, etc.)
- * detected by tracking significant motion in the camera frame.
+ * Uses getUserMedia() directly. Motion detection via canvas pixel diff.
+ * Progress only goes UP — never decays. Just need proof of a moving body.
+ * Real-time motion meter shown for feedback.
  */
 (function () {
   const GESTURES = [
@@ -15,45 +12,45 @@
       name: 'WAVE YOUR HAND',
       instruction: 'WAVE at the camera! Show some MOVEMENT, maggot!',
       emoji: '👋',
-      hint: 'Move your hand rapidly side to side',
-      motionThreshold: 0.04, // fraction of frame that must change
-      requiredFrames: 8      // must detect motion for this many frames
+      hint: 'Move your hand rapidly side to side'
     },
     {
       name: 'THUMBS UP',
-      instruction: 'Give me a THUMBS UP! Show me your approval, soldier!',
+      instruction: 'Give me a THUMBS UP where I can SEE it!',
       emoji: '👍',
-      hint: 'Hold a clear thumbs up to the camera',
-      motionThreshold: 0.02,
-      requiredFrames: 15  // needs to be held still — detected by LOW motion after initial motion
+      hint: 'Raise your thumb clearly in front of camera'
     },
     {
       name: 'CLAP YOUR HANDS',
       instruction: 'CLAP YOUR HANDS! I need to see proof of life!',
       emoji: '👏',
-      hint: 'Clap your hands visibly in front of the camera',
-      motionThreshold: 0.05,
-      requiredFrames: 6
+      hint: 'Clap your hands visibly in front of the camera'
     },
     {
       name: 'NOD YOUR HEAD',
       instruction: 'NOD YOUR HEAD! Acknowledge your sergeant!',
       emoji: '🫡',
-      hint: 'Move your head up and down clearly',
-      motionThreshold: 0.03,
-      requiredFrames: 8
+      hint: 'Move your head up and down clearly'
     },
     {
       name: 'GIVE A SALUTE',
       instruction: 'SALUTE! Show some RESPECT for this verification system!',
       emoji: '🫡',
-      hint: 'Raise your right hand to your forehead',
-      motionThreshold: 0.03,
-      requiredFrames: 10
+      hint: 'Raise your hand to your forehead, then lower it'
+    },
+    {
+      name: 'SHAKE YOUR HEAD',
+      instruction: 'SHAKE YOUR HEAD like you DISAGREE with being scanned!',
+      emoji: '🙅',
+      hint: 'Turn your head left and right'
     }
   ];
 
-  const HOLD_FRAMES = 20;   // frames of motion to pass
+  // How many motion-frames to accumulate (progress only goes up, never decays)
+  const REQUIRED_MOTION_FRAMES = 25;
+  // Fraction of pixels that must change to count as a motion frame
+  const MOTION_THRESHOLD = 0.025;
+
   const CANVAS_W = 320;
   const CANVAS_H = 240;
 
@@ -64,15 +61,15 @@
   let animFrameId = null;
   let detecting = false;
 
-  // Motion tracking state
+  // Motion tracking
   let prevPixels = null;
-  let motionFrameCount = 0;
+  let accumulatedMotion = 0; // only goes up
   let frameCount = 0;
 
   function render(shadow, cont) {
     shadowRoot = shadow;
     container = cont;
-    motionFrameCount = 0;
+    accumulatedMotion = 0;
     frameCount = 0;
     prevPixels = null;
     detecting = false;
@@ -89,9 +86,6 @@
         <div class="rt-gesture-wrap" id="rt-gesture-wrap">
           <div class="rt-gesture-loading" id="rt-gesture-loading">
             <div class="rt-gesture-loading-text">REQUESTING BIOMETRIC ACCESS...</div>
-            <div class="rt-gesture-loading-bar">
-              <div class="rt-gesture-loading-fill" id="rt-loading-fill"></div>
-            </div>
             <button class="rt-submit-btn" id="rt-camera-btn" style="margin-top:16px;font-size:13px;">
               📷 ACTIVATE CAMERA
             </button>
@@ -110,15 +104,30 @@
               </div>
               <div class="rt-gesture-status" id="rt-gesture-status">Perform: ${currentGesture.name}</div>
             </div>
+            <!-- Real-time motion meter -->
+            <div id="rt-motion-meter" style="
+              position:absolute;bottom:8px;left:8px;right:8px;height:6px;
+              background:rgba(0,0,0,0.5);border-radius:3px;overflow:hidden;z-index:5;
+            ">
+              <div id="rt-motion-bar" style="
+                height:100%;width:0%;border-radius:3px;
+                transition:width 0.1s,background 0.2s;background:var(--accent-cyan);
+              "></div>
+            </div>
+            <!-- Motion label -->
+            <div id="rt-motion-label" style="
+              position:absolute;bottom:18px;left:12px;
+              font-family:var(--font-mono);font-size:10px;color:var(--accent-cyan);
+              text-shadow:0 0 4px rgba(0,0,0,0.8);z-index:5;
+            ">MOTION: 0%</div>
           </div>
         </div>
         <div class="text-center mt-8" style="font-size:11px;color:var(--text-dim);">
-          Hint: ${currentGesture.hint} · Camera feed stays 100% local
+          Hint: ${currentGesture.hint} · Camera feed stays 100% local · Progress only goes up!
         </div>
       </div>
     `;
 
-    // Camera button activates on click (requires user gesture for getUserMedia)
     const btn = shadow.getElementById('rt-camera-btn');
     if (btn) btn.addEventListener('click', startCamera);
   }
@@ -126,11 +135,9 @@
   async function startCamera() {
     const loadingEl = shadowRoot.getElementById('rt-gesture-loading');
     const activeEl = shadowRoot.getElementById('rt-gesture-active');
-    const fillEl = shadowRoot.getElementById('rt-loading-fill');
     const btn = shadowRoot.getElementById('rt-camera-btn');
 
-    if (btn) { btn.disabled = true; btn.textContent = 'ACCESSING...'; }
-    if (fillEl) fillEl.style.width = '60%';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ ACCESSING...'; }
 
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -138,7 +145,6 @@
         audio: false
       });
     } catch (err) {
-      // Camera denied or unavailable — offer skip
       if (loadingEl) {
         loadingEl.innerHTML = `
           <div class="rt-gesture-loading-text" style="color:var(--accent-red)">
@@ -160,14 +166,10 @@
       return;
     }
 
-    // Camera active — show canvas
-    if (fillEl) fillEl.style.width = '100%';
-    setTimeout(() => {
-      if (loadingEl) loadingEl.style.display = 'none';
-      if (activeEl) activeEl.style.display = 'block';
-    }, 300);
+    // Camera opened — switch to active view
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (activeEl) activeEl.style.display = 'block';
 
-    // Set up hidden video element to pull frames from
     const video = document.createElement('video');
     video.srcObject = stream;
     video.setAttribute('playsinline', '');
@@ -186,36 +188,42 @@
 
   function startDetection(video, canvas) {
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    // Offscreen canvas for pixel comparison
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const offscreen = document.createElement('canvas');
-    offscreen.width = 80; offscreen.height = 60; // small for perf
-    const offCtx = offscreen.getContext('2d');
+    offscreen.width = 80; offscreen.height = 60;
+    const offCtx = offscreen.getContext('2d', { willReadFrequently: true });
 
     function loop() {
       if (!detecting) return;
       animFrameId = requestAnimationFrame(loop);
       frameCount++;
 
-      // Draw mirrored video frame
+      // Draw mirrored video
       ctx.save();
       ctx.translate(CANVAS_W, 0);
       ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0, CANVAS_W, CANVAS_H);
       ctx.restore();
 
-      // Motion detection at low resolution
+      // Downsample for motion detection
       offCtx.drawImage(video, 0, 0, 80, 60);
       const pixels = offCtx.getImageData(0, 0, 80, 60).data;
 
-      // Draw scanner overlay
+      // Scanner overlay
       drawScannerOverlay(ctx, frameCount);
 
       if (prevPixels) {
-        const motion = computeMotion(pixels, prevPixels);
-        updateProgress(motion);
+        const motionLevel = computeMotion(pixels, prevPixels);
+        updateMotionMeter(motionLevel);
+
+        // Only accumulate if above threshold — never decay
+        if (motionLevel > MOTION_THRESHOLD) {
+          accumulatedMotion++;
+        }
+
+        updateProgress();
       }
-      prevPixels = pixels;
+      prevPixels = new Uint8ClampedArray(pixels);
     }
 
     loop();
@@ -225,49 +233,52 @@
     let diff = 0;
     const total = curr.length / 4;
     for (let i = 0; i < curr.length; i += 4) {
-      // Luminance diff
-      const dl = Math.abs(curr[i] - prev[i]) + Math.abs(curr[i+1] - prev[i+1]) + Math.abs(curr[i+2] - prev[i+2]);
-      if (dl > 30) diff++; // threshold to ignore noise
+      const dl = Math.abs(curr[i] - prev[i]) +
+                 Math.abs(curr[i+1] - prev[i+1]) +
+                 Math.abs(curr[i+2] - prev[i+2]);
+      if (dl > 40) diff++;
     }
-    return diff / total; // fraction of pixels that changed
+    return diff / total;
   }
 
-  function updateProgress(motionLevel) {
-    const threshold = currentGesture.motionThreshold;
+  function updateMotionMeter(motionLevel) {
+    const bar = shadowRoot.getElementById('rt-motion-bar');
+    const label = shadowRoot.getElementById('rt-motion-label');
+    if (!bar || !label) return;
+
+    // Scale for visual (cap at 20% pixel change = full bar)
+    const pct = Math.min(motionLevel / 0.15, 1) * 100;
+    bar.style.width = pct + '%';
+
+    const isActive = motionLevel > MOTION_THRESHOLD;
+    bar.style.background = isActive ? 'var(--accent-green)' : 'var(--accent-cyan)';
+    label.textContent = `MOTION: ${Math.round(pct)}%${isActive ? ' ✓ DETECTED' : ''}`;
+    label.style.color = isActive ? 'var(--accent-green)' : 'var(--accent-cyan)';
+  }
+
+  function updateProgress() {
+    const progress = Math.min(accumulatedMotion / REQUIRED_MOTION_FRAMES, 1);
+
     const circleEl = shadowRoot.getElementById('rt-gesture-progress-circle');
     const statusEl = shadowRoot.getElementById('rt-gesture-status');
     const targetEl = shadowRoot.getElementById('rt-gesture-target');
 
-    if (motionLevel > threshold) {
-      motionFrameCount++;
-    } else {
-      // Decay slowly — don't reset instantly if motion pauses for a frame
-      motionFrameCount = Math.max(0, motionFrameCount - 1);
-    }
-
-    const required = currentGesture.requiredFrames;
-    const progress = Math.min(motionFrameCount / required, 1);
-
     if (circleEl) {
       circleEl.setAttribute('stroke-dashoffset', String(283 * (1 - progress)));
-      // Colour shifts green as progress builds
-      circleEl.setAttribute('stroke', progress > 0.6 ? '#10b981' : progress > 0.3 ? '#f59e0b' : '#06b6d4');
+      circleEl.setAttribute('stroke',
+        progress > 0.7 ? '#10b981' : progress > 0.3 ? '#f59e0b' : '#06b6d4');
     }
 
     if (statusEl) {
-      if (motionLevel > threshold) {
-        statusEl.textContent = `MOTION DETECTED — KEEP GOING! ${Math.round(progress * 100)}%`;
-        statusEl.style.color = 'var(--accent-green)';
-      } else {
-        statusEl.textContent = `Perform: ${currentGesture.name}`;
-        statusEl.style.color = 'var(--accent-cyan)';
-      }
+      statusEl.textContent = progress > 0
+        ? `RECORDING... ${Math.round(progress * 100)}%`
+        : `Perform: ${currentGesture.name}`;
+      statusEl.style.color = progress > 0.5 ? 'var(--accent-green)' : 'var(--accent-cyan)';
     }
 
     if (targetEl) targetEl.style.transform = `scale(${1 + progress * 0.4})`;
 
     if (progress >= 1) {
-      // SUCCESS
       detecting = false;
       stopCamera();
 
@@ -281,7 +292,7 @@
           detail: {
             passed: true,
             speedFactor: totalTime < 4 ? 0.6 : 0.2,
-            perfect: false, // physical gesture can't be "too perfect"
+            perfect: false,
             elapsed: totalTime
           }
         }));
@@ -290,7 +301,7 @@
   }
 
   function drawScannerOverlay(ctx, frame) {
-    // Grid lines
+    // Grid
     ctx.strokeStyle = 'rgba(6, 182, 212, 0.12)';
     ctx.lineWidth = 1;
     for (let x = 0; x < CANVAS_W; x += 40) {
@@ -305,9 +316,11 @@
     ctx.lineWidth = 2;
     [[0,0],[CANVAS_W,0],[0,CANVAS_H],[CANVAS_W,CANVAS_H]].forEach(([x,y]) => {
       const sx = x === 0 ? 1 : -1, sy = y === 0 ? 1 : -1;
-      ctx.beginPath(); ctx.moveTo(x, y + sy*bw); ctx.lineTo(x, y); ctx.lineTo(x + sx*bw, y); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x, y + sy*bw); ctx.lineTo(x, y); ctx.lineTo(x + sx*bw, y);
+      ctx.stroke();
     });
-    // Sweep line
+    // Sweep
     const sweepY = ((frame * 3) % CANVAS_H);
     const grad = ctx.createLinearGradient(0, sweepY - 6, 0, sweepY + 2);
     grad.addColorStop(0, 'rgba(6,182,212,0)');
