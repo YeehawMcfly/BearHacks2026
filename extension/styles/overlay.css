@@ -1311,3 +1311,123 @@
 
 .rt-intro-anim { animation: fadeIn 0.6s ease-out; }
 .rt-slide-up { animation: slideUp 0.5s ease-out; }
+
+/* ========== VISUAL REFERENCE ANIMATIONS ========== */
+.rt-reference-anim {
+  position: absolute; right: 16px; top: 16px;
+  width: 60px; height: 100px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.rt-reference-anim div {
+  position: absolute;
+  background: #06b6d4;
+  border-radius: 4px;
+  transform-origin: center top;
+}
+
+/* Base stick figure parts */
+.rt-reference-anim .stick-head { width: 14px; height: 14px; border-radius: 50%; top: 15px; left: 23px; }
+.rt-reference-anim .stick-torso { width: 4px; height: 35px; top: 29px; left: 28px; }
+.rt-reference-anim .stick-arm-l { width: 3px; height: 28px; top: 32px; left: 28px; transform-origin: top center; }
+.rt-reference-anim .stick-arm-r { width: 3px; height: 28px; top: 32px; left: 28px; transform-origin: top center; }
+.rt-reference-anim .stick-leg-l { width: 3px; height: 32px; top: 62px; left: 28px; transform-origin: top center; }
+.rt-reference-anim .stick-leg-r { width: 3px; height: 32px; top: 62px; left: 28px; transform-origin: top center; }
+
+/* ── WAVE YOUR HAND ── */
+.rt-anim-wave-your-hand .stick-arm-l { transform: rotate(135deg); }
+.rt-anim-wave-your-hand .stick-arm-r { transform: rotate(-30deg); animation: waveHand 1s ease-in-out infinite alternate; }
+.rt-anim-wave-your-hand .stick-leg-l { transform: rotate(15deg); }
+.rt-anim-wave-your-hand .stick-leg-r { transform: rotate(-15deg); }
+@keyframes waveHand {
+  0% { transform: rotate(-130deg); }
+  100% { transform: rotate(-170deg); }
+}
+
+/* ── THUMBS UP ── */
+.rt-anim-thumbs-up .stick-arm-l { transform: rotate(135deg); }
+.rt-anim-thumbs-up .stick-arm-r { transform: rotate(-90deg) scaleY(0.7); border-radius: 50%; } /* Hand extended out */
+.rt-anim-thumbs-up .stick-leg-l { transform: rotate(15deg); }
+.rt-anim-thumbs-up .stick-leg-r { transform: rotate(-15deg); }
+
+/* ── SQUATS ── */
+.rt-anim-squats { animation: squatDownUp 2s ease-in-out infinite; transform-origin: bottom center; }
+.rt-anim-squats .stick-arm-l { transform: rotate(45deg); }
+.rt-anim-squats .stick-arm-r { transform: rotate(-45deg); }
+.rt-anim-squats .stick-leg-l { transform: rotate(10deg); animation: squatLegL 2s ease-in-out infinite; }
+.rt-anim-squats .stick-leg-r { transform: rotate(-10deg); animation: squatLegR 2s ease-in-out infinite; }
+@keyframes squatDownUp {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(15px); }
+}
+@keyframes squatLegL {
+  0%, 100% { transform: rotate(10deg) scaleY(1); }
+  50% { transform: rotate(35deg) scaleY(0.7); }
+}
+@keyframes squatLegR {
+  0%, 100% { transform: rotate(-10deg) scaleY(1); }
+  50% { transform: rotate(-35deg) scaleY(0.7); }
+}
+
+/* ── JUMPING JACKS ── */
+.rt-anim-jumping-jacks .stick-arm-l { animation: jjArmL 1s ease-in-out infinite alternate; }
+.rt-anim-jumping-jacks .stick-arm-r { animation: jjArmR 1s ease-in-out infinite alternate; }
+.rt-anim-jumping-jacks .stick-leg-l { animation: jjLegL 1s ease-in-out infinite alternate; }
+.rt-anim-jumping-jacks .stick-leg-r { animation: jjLegR 1s ease-in-out infinite alternate; }
+@keyframes jjArmL { 0% { transform: rotate(20deg); } 100% { transform: rotate(160deg); } }
+@keyframes jjArmR { 0% { transform: rotate(-20deg); } 100% { transform: rotate(-160deg); } }
+@keyframes jjLegL { 0% { transform: rotate(5deg); } 100% { transform: rotate(30deg); } }
+@keyframes jjLegR { 0% { transform: rotate(-5deg); } 100% { transform: rotate(-30deg); } }
+
+/* ── MARCH IN PLACE ── */
+.rt-anim-march-in-place .stick-arm-l { animation: marchArmL 1s linear infinite; }
+.rt-anim-march-in-place .stick-arm-r { animation: marchArmR 1s linear infinite; }
+.rt-anim-march-in-place .stick-leg-l { animation: marchLegL 1s linear infinite; }
+.rt-anim-march-in-place .stick-leg-r { animation: marchLegR 1s linear infinite; }
+@keyframes marchArmL { 0%, 100% { transform: rotate(20deg); } 50% { transform: rotate(-40deg); } }
+@keyframes marchArmR { 0%, 100% { transform: rotate(-40deg); } 50% { transform: rotate(20deg); } }
+@keyframes marchLegL { 0%, 100% { transform: rotate(5deg) scaleY(1); } 50% { transform: rotate(-45deg) scaleY(0.6); } }
+@keyframes marchLegR { 0%, 100% { transform: rotate(-45deg) scaleY(0.6); } 50% { transform: rotate(-5deg) scaleY(1); } }
+
+/* ── ARM CIRCLES ── */
+.rt-anim-arm-circles .stick-leg-l { transform: rotate(15deg); }
+.rt-anim-arm-circles .stick-leg-r { transform: rotate(-15deg); }
+.rt-anim-arm-circles .stick-arm-l { transform: rotate(135deg); }
+.rt-anim-arm-circles .stick-arm-r { animation: armCircle 1.5s linear infinite; }
+@keyframes armCircle {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+
+/* Fallbacks for other gestures */
+.rt-anim-clap-your-hands .stick-arm-l { transform: rotate(45deg); animation: clap 0.3s infinite alternate; }
+.rt-anim-clap-your-hands .stick-arm-r { transform: rotate(-45deg); animation: clap 0.3s infinite alternate reverse; }
+@keyframes clap { 0% { transform: rotate(45deg); } 100% { transform: rotate(25deg); } }
+.rt-anim-give-a-salute .stick-arm-l { transform: rotate(135deg); }
+.rt-anim-give-a-salute .stick-arm-r { transform: rotate(-135deg) scaleY(0.6); }
+.rt-anim-nod-your-head .stick-head { animation: nod 0.5s infinite alternate; }
+@keyframes nod { 0% { transform: translateY(-3px); } 100% { transform: translateY(3px); } }
+.rt-anim-shake-your-head .stick-head { animation: shakeH 0.5s infinite alternate; }
+@keyframes shakeH { 0% { transform: translateX(-3px); } 100% { transform: translateX(3px); } }
+
+/* ========== SCREEN SHAKE ANIMATION ========== */
+@keyframes shakeScreen {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  10% { transform: translate(-5px, -5px) rotate(-1deg); }
+  20% { transform: translate(5px, 5px) rotate(1deg); }
+  30% { transform: translate(-5px, 5px) rotate(-1deg); }
+  40% { transform: translate(5px, -5px) rotate(1deg); }
+  50% { transform: translate(-5px, -5px) rotate(-1deg); }
+  60% { transform: translate(5px, 5px) rotate(1deg); }
+  70% { transform: translate(-5px, 5px) rotate(-1deg); }
+  80% { transform: translate(5px, -5px) rotate(1deg); }
+  90% { transform: translate(-5px, -5px) rotate(-1deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+.rt-shake {
+  animation: shakeScreen 0.5s cubic-bezier(.36,.07,.19,.97) both;
+}

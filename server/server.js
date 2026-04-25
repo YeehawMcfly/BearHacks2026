@@ -9,6 +9,52 @@ const PORT = 3000;
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static('public')); // Serve dashboard.html
+
+// ===== Dashboard SSE Hub =====
+const dashboardClients = new Set();
+let latestBehaviorData = null;
+
+// SSE Endpoint for the dashboard
+app.get('/api/dashboard/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+  
+  const clientId = Date.now();
+  dashboardClients.add(res);
+  
+  if (latestBehaviorData) {
+    res.write(`event: state\ndata: ${JSON.stringify(latestBehaviorData)}\n\n`);
+  }
+  
+  req.on('close', () => {
+    dashboardClients.delete(res);
+  });
+});
+
+// Endpoint for extension to push data
+app.post('/api/dashboard/push', (req, res) => {
+  const { event, type, state } = req.body;
+  
+  if (state) {
+    latestBehaviorData = state;
+    const payload = `event: state\ndata: ${JSON.stringify(state)}\n\n`;
+    for (const client of dashboardClients) {
+      client.write(payload);
+    }
+  }
+  
+  if (event) {
+    const payload = `event: event\ndata: ${JSON.stringify({ message: event, type: type || '' })}\n\n`;
+    for (const client of dashboardClients) {
+      client.write(payload);
+    }
+  }
+  
+  res.sendStatus(200);
+});
 
 // ===== Gemma 4 Setup =====
 let ai = null;
@@ -48,21 +94,25 @@ app.post('/api/ai/insult', async (req, res) => {
     const emotion = context.emotion || (context.level <= 2 ? 'calm' : context.level <= 4 ? 'angry' : 'furious');
     
     let situation = '';
+    const b = context.behavior || {};
+    const behaviorStr = b.mouseEntropy ? 
+      `Behavior data — Mouse entropy (randomness): ${b.mouseEntropy.toFixed(2)} (low is robotic). Key variance: ${b.keystrokeVariance?.toFixed(2)} (low is robotic). Backspaces/Corrections: ${b.corrections || 0}.` : '';
+
     switch (context.action) {
       case 'intro':
         situation = `Introduce level ${context.level} (${context.levelName || 'unknown'}). Give the user an instruction in character. Be ${emotion}. 1-2 sentences.`;
         break;
       case 'pass':
-        situation = `The user just PASSED level ${context.level}. React. Suspicion: ${context.suspicion || 'unknown'}%. Time: ${context.elapsed ? context.elapsed.toFixed(1) + 's' : 'unknown'}. Be ${emotion} but grudgingly acknowledge them. 1-2 sentences.`;
+        situation = `The user just PASSED level ${context.level} in ${context.elapsed ? context.elapsed.toFixed(1) + 's' : 'unknown'}. Suspicion score is ${context.suspicion || 'unknown'}%. ${behaviorStr} Reference their specific behavior data (e.g. robotic mouse movements, slow typing, hesitations) in your reaction. Be ${emotion} but grudgingly let them pass. 1-2 sentences.`;
         break;
       case 'fail':
-        situation = `The user just FAILED level ${context.level}. Roast them. Suspicion: ${context.suspicion || 'unknown'}%. Be ${emotion} and insulting. 1-2 sentences.`;
+        situation = `The user just FAILED level ${context.level}. Suspicion score is ${context.suspicion || 'unknown'}%. ${behaviorStr} Roast their specific behavioral metrics. Be ${emotion} and insulting. 1-2 sentences.`;
         break;
       case 'ban':
-        situation = `The user just got BANNED. Suspicion: ${context.score || context.suspicion}%. Deliver a final devastating line. Be ${emotion}. 1 sentence.`;
+        situation = `The user just got BANNED. Suspicion: ${context.score || context.suspicion}%. ${behaviorStr} Deliver a final devastating line calling out their specific non-human behavior. Be ${emotion}. 1 sentence.`;
         break;
       default:
-        situation = `React to the user at level ${context.level}. Suspicion: ${context.suspicion || context.score || 'unknown'}%. Be ${emotion}. 1-2 sentences.`;
+        situation = `React to the user at level ${context.level}. Suspicion: ${context.suspicion || context.score || 'unknown'}%. ${behaviorStr} Be ${emotion}. 1-2 sentences.`;
     }
 
     const prompt = `${getPrompt(emotion)}\n\n${situation}\n\nIMPORTANT: Respond with ONLY the dialogue line. No quotes, no formatting, no stage directions. Just the words SGT. CAPTCHA would say.`;

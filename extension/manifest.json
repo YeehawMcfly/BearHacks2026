@@ -26,6 +26,7 @@
         "js/levels/level-body.js",
         "js/submit-chaos.js",
         "js/decoy-captcha.js",
+        "js/particles.js",
         "js/overlay.js",
         "content.js"
       ],

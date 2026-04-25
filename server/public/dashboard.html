@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SGT CAPTCHA - Behavioral Analysis</title>
+  <style>
+    :root {
+      --bg: #0a0e17;
+      --panel: #111827;
+      --panel-border: rgba(6, 182, 212, 0.3);
+      --text: #e2e8f0;
+      --dim: #64748b;
+      --cyan: #06b6d4;
+      --red: #ff2d2d;
+      --green: #10b981;
+      --amber: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Courier New', Courier, monospace;
+      padding: 20px; height: 100vh; display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-bottom: 20px; border-bottom: 1px solid var(--panel-border);
+      margin-bottom: 20px;
+    }
+    h1 { color: var(--cyan); text-shadow: 0 0 10px rgba(6,182,212,0.5); letter-spacing: 2px; }
+    .status-badge {
+      background: rgba(16, 185, 129, 0.2); color: var(--green);
+      padding: 6px 12px; border-radius: 4px; border: 1px solid var(--green);
+      font-weight: bold;
+    }
+    .status-badge.offline {
+      background: rgba(255, 45, 45, 0.2); color: var(--red); border-color: var(--red);
+    }
+    
+    .grid {
+      display: grid; grid-template-columns: 1fr 1fr 300px;
+      grid-template-rows: 1fr 1fr; gap: 20px; flex: 1; min-height: 0;
+    }
+    .panel {
+      background: var(--panel); border: 1px solid var(--panel-border);
+      border-radius: 8px; padding: 16px; display: flex; flex-direction: column;
+      position: relative;
+    }
+    .panel-title { color: var(--cyan); font-size: 14px; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+    
+    /* Gauge */
+    .gauge-container { display: flex; align-items: center; justify-content: center; flex: 1; flex-direction: column; }
+    .score-value { font-size: 80px; font-weight: bold; color: var(--green); text-shadow: 0 0 20px currentColor; transition: color 0.5s; }
+    .score-value.warn { color: var(--amber); }
+    .score-value.danger { color: var(--red); }
+    
+    /* Heatmap */
+    .heatmap-container { flex: 1; position: relative; background: #000; border-radius: 4px; overflow: hidden; border: 1px solid #333; }
+    #heatmapCanvas { width: 100%; height: 100%; display: block; }
+    
+    /* Metrics */
+    .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .metric { background: rgba(0,0,0,0.4); padding: 12px; border-radius: 6px; border-left: 3px solid var(--cyan); }
+    .metric-label { font-size: 11px; color: var(--dim); margin-bottom: 4px; }
+    .metric-value { font-size: 24px; font-weight: bold; }
+    
+    /* Timeline */
+    .timeline { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+    .timeline-event { padding: 8px; border-left: 2px solid var(--dim); background: rgba(255,255,255,0.02); }
+    .timeline-event.level { border-left-color: var(--cyan); color: var(--cyan); }
+    .timeline-event.ban { border-left-color: var(--red); color: var(--red); background: rgba(255,0,0,0.1); }
+    .timeline-event.suspicious { border-left-color: var(--amber); color: var(--amber); }
+    .timeline-time { color: var(--dim); font-size: 10px; margin-right: 8px; }
+    
+    /* Charts */
+    .chart-container { flex: 1; position: relative; display: flex; align-items: flex-end; gap: 2px; padding-top: 20px; }
+    .bar { background: var(--cyan); width: flex-basis; transition: height 0.2s; border-radius: 2px 2px 0 0; min-width: 4px; flex: 1; }
+    .chart-label { position: absolute; top: 0; left: 0; font-size: 10px; color: var(--dim); }
+    
+    .panel.tall { grid-row: span 2; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SGT CAPTCHA // OVERSEER TERMINAL</h1>
+    <div id="connectionStatus" class="status-badge offline">OFFLINE</div>
+  </header>
+  
+  <div class="grid">
+    <!-- Big Gauge -->
+    <div class="panel">
+      <div class="panel-title">LIVE SUSPICION SCORE</div>
+      <div class="gauge-container">
+        <div id="scoreDisplay" class="score-value">5</div>
+        <div style="color: var(--dim); margin-top: 10px;">THRESHOLD: 85 (BAN)</div>
+      </div>
+    </div>
+    
+    <!-- Mouse Heatmap -->
+    <div class="panel">
+      <div class="panel-title">TRAJECTORY ANALYSIS (LIVE)</div>
+      <div class="heatmap-container">
+        <canvas id="heatmapCanvas"></canvas>
+      </div>
+    </div>
+    
+    <!-- Event Timeline -->
+    <div class="panel tall">
+      <div class="panel-title">EVENT TIMELINE</div>
+      <div id="timeline" class="timeline">
+        <div class="timeline-event"><span class="timeline-time">SYSTEM</span>Waiting for subject connection...</div>
+      </div>
+    </div>
+    
+    <!-- Metrics -->
+    <div class="panel">
+      <div class="panel-title">BIOMETRIC METRICS</div>
+      <div class="metrics-grid">
+        <div class="metric">
+          <div class="metric-label">MOUSE ENTROPY</div>
+          <div id="entropyDisplay" class="metric-value">0.00</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">KEY VARIANCE</div>
+          <div id="varianceDisplay" class="metric-value">0.00</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">CORRECTIONS</div>
+          <div id="correctionsDisplay" class="metric-value">0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">LEVELS PASSED</div>
+          <div id="levelsDisplay" class="metric-value">0</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Keystroke Rhythm -->
+    <div class="panel">
+      <div class="panel-title">KEYSTROKE RHYTHM INTERVALS</div>
+      <div class="chart-container" id="ksChart">
+        <div class="chart-label">Delay between keys (ms)</div>
+        <!-- Bars injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const scoreEl = document.getElementById('scoreDisplay');
+    const entropyEl = document.getElementById('entropyDisplay');
+    const varianceEl = document.getElementById('varianceDisplay');
+    const correctionsEl = document.getElementById('correctionsDisplay');
+    const levelsEl = document.getElementById('levelsDisplay');
+    const statusEl = document.getElementById('connectionStatus');
+    const timelineEl = document.getElementById('timeline');
+    const ksChart = document.getElementById('ksChart');
+    
+    // Heatmap setup
+    const canvas = document.getElementById('heatmapCanvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      width = rect.width;
+      height = rect.height;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    
+    // Fade out trails slowly
+    function fadeHeatmap() {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+      ctx.fillRect(0, 0, width, height);
+      requestAnimationFrame(fadeHeatmap);
+    }
+    fadeHeatmap();
+    
+    // Draw mouse point
+    function drawPoint(x, y, isClick) {
+      // Normalize assumed 1920x1080 to canvas size
+      const nx = (x / 1920) * width;
+      const ny = (y / 1080) * height;
+      
+      ctx.beginPath();
+      ctx.arc(nx, ny, isClick ? 8 : 2, 0, Math.PI * 2);
+      ctx.fillStyle = isClick ? '#ff2d2d' : '#06b6d4';
+      if (isClick) {
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#ff2d2d';
+      } else {
+        ctx.shadowBlur = 2;
+        ctx.shadowColor = '#06b6d4';
+      }
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    
+    function addEvent(text, type = '') {
+      const el = document.createElement('div');
+      el.className = `timeline-event ${type}`;
+      const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+      el.innerHTML = `<span class="timeline-time">${time}</span>${text}`;
+      timelineEl.prepend(el);
+      if (timelineEl.children.length > 50) timelineEl.lastChild.remove();
+    }
+    
+    let ksBars = Array(40).fill(0);
+    function updateKsChart(intervals) {
+      if (!intervals || !intervals.length) return;
+      // Keep last 40 intervals
+      ksBars = intervals.slice(-40);
+      while(ksBars.length < 40) ksBars.unshift(0);
+      
+      // Remove old bars, keep label
+      const label = ksChart.querySelector('.chart-label');
+      ksChart.innerHTML = '';
+      ksChart.appendChild(label);
+      
+      const max = Math.max(...ksBars, 500);
+      
+      ksBars.forEach(val => {
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        const h = Math.min((val / max) * 100, 100);
+        bar.style.height = `${h}%`;
+        if (val === 0) bar.style.opacity = '0';
+        ksChart.appendChild(bar);
+      });
+    }
+    
+    // Connect to SSE stream
+    function connectSSE() {
+      const evtSource = new EventSource('/api/dashboard/events');
+      
+      evtSource.onopen = () => {
+        statusEl.textContent = 'CONNECTED';
+        statusEl.className = 'status-badge';
+        addEvent('Dashboard connected to Overseer stream', 'system');
+      };
+      
+      evtSource.onerror = () => {
+        statusEl.textContent = 'OFFLINE';
+        statusEl.className = 'status-badge offline';
+      };
+      
+      evtSource.addEventListener('state', (e) => {
+        const data = JSON.parse(e.data);
+        
+        // Update metrics
+        const s = data.suspicionScore || 0;
+        scoreEl.textContent = Math.round(s);
+        scoreEl.className = 'score-value' + (s >= 85 ? ' danger' : s >= 60 ? ' warn' : '');
+        
+        entropyEl.textContent = (data.mouseEntropy || 0).toFixed(2);
+        varianceEl.textContent = (data.keystrokeVariance || 0).toFixed(2);
+        correctionsEl.textContent = data.corrections || 0;
+        levelsEl.textContent = data.levelsCompleted || 0;
+        
+        updateKsChart(data.ksIntervals);
+        
+        // Draw new mouse points
+        if (data.newMousePts) {
+          data.newMousePts.forEach(p => drawPoint(p.x, p.y, p.click));
+        }
+      });
+      
+      evtSource.addEventListener('event', (e) => {
+        const data = JSON.parse(e.data);
+        addEvent(data.message, data.type);
+      });
+    }
+    
+    connectSSE();
+  </script>
+</body>
+</html>

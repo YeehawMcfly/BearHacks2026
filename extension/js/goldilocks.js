@@ -17,7 +17,10 @@
     totalStartTime: 0,
     corrections: 0,
     events: [],
-    levelsCompleted: 0
+    levelsCompleted: 0,
+    lastBroadcast: 0,
+    broadcastQueued: false,
+    newMousePts: []
   };
 
   function now() { return performance.now(); }
@@ -128,22 +131,27 @@
 
     trackMouse(x, y) {
       state.mousePositions.push({ x, y, t: now() });
+      state.newMousePts.push({ x, y, click: false });
       if (state.mousePositions.length > 200) state.mousePositions.shift();
+      this.queueBroadcast();
     },
 
     trackKeystroke(key) {
       state.keystrokeTimes.push(now());
       if (key === 'Backspace' || key === 'Delete') state.corrections++;
       state.events.push({ type: 'key', key, t: now() });
+      this.broadcastState(); // Instant update for keys
     },
 
     trackClick(x, y) {
       state.clickTimes.push(now());
       state.clickPositions.push({ x, y });
+      state.newMousePts.push({ x, y, click: true });
       state.events.push({ type: 'click', x, y, t: now() });
+      this.broadcastState(); // Instant update for clicks
     },
 
-    trackCorrection() { state.corrections++; },
+    trackCorrection() { state.corrections++; this.broadcastState(); },
 
     evaluate(levelResult) {
       const score = calculateSuspicion(levelResult);
@@ -176,6 +184,46 @@
         totalTime: (now() - state.totalStartTime) / 1000,
         levelsCompleted: state.levelsCompleted
       };
+    },
+
+    queueBroadcast() {
+      if (state.broadcastQueued) return;
+      const timeSince = now() - state.lastBroadcast;
+      if (timeSince > 500) {
+        this.broadcastState();
+      } else {
+        state.broadcastQueued = true;
+        setTimeout(() => this.broadcastState(), 500 - timeSince);
+      }
+    },
+
+    async broadcastState() {
+      state.broadcastQueued = false;
+      state.lastBroadcast = now();
+      
+      const ksIntervals = [];
+      for (let i = 1; i < state.keystrokeTimes.length; i++) {
+        ksIntervals.push(state.keystrokeTimes[i] - state.keystrokeTimes[i-1]);
+      }
+
+      const payload = {
+        state: {
+          ...this.getBehaviorData(),
+          ksIntervals,
+          newMousePts: [...state.newMousePts]
+        }
+      };
+      state.newMousePts = []; // clear after sending
+
+      // Try sending (ignore failure)
+      try {
+        await fetch('http://localhost:3000/api/dashboard/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(1000)
+        });
+      } catch (_) {}
     }
   };
 })();

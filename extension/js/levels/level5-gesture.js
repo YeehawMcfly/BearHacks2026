@@ -59,6 +59,17 @@
               </div>
               <div class="rt-gesture-status" id="rt-gesture-status">Perform: ${currentGesture.name}</div>
             </div>
+            
+            <!-- Reference Animation -->
+            <div class="rt-reference-anim rt-anim-${currentGesture.name.replace(/\s+/g, '-').toLowerCase()}">
+              <div class="stick-head"></div>
+              <div class="stick-torso"></div>
+              <div class="stick-arm-l"></div>
+              <div class="stick-arm-r"></div>
+              <div class="stick-leg-l"></div>
+              <div class="stick-leg-r"></div>
+            </div>
+
             <!-- Detection info -->
             <div id="rt-detect-info" style="position:absolute;bottom:8px;left:8px;right:8px;
               font-family:var(--font-mono);font-size:10px;color:var(--accent-cyan);

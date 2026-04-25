@@ -155,6 +155,11 @@
         <div class="rt-normal-footer" id="rt-normal-footer">
           <div class="rt-normal-status" id="rt-normal-status"></div>
         </div>
+
+        <!-- Hacking Matrix Terminal Overlay -->
+        <div id="rt-matrix-terminal" style="display:none; position:absolute; inset:0; background:#000; z-index:400; padding:40px; font-family:monospace; color:#0f0; font-size:14px; overflow:hidden;">
+          <div id="rt-matrix-log" style="display:flex; flex-direction:column; justify-content:flex-end; height:100%;"></div>
+        </div>
       </div>
     `;
   }
@@ -226,7 +231,48 @@
     showNormalText("Your behavior patterns are... unusual.");
     await new Promise(r => setTimeout(r, 1200));
 
-    // Phase 2: Screen flash + CRT boot
+    // Phase 2: Matrix "Scanning" Terminal
+    const term = shadowRoot.getElementById('rt-matrix-terminal');
+    const log = shadowRoot.getElementById('rt-matrix-log');
+    term.style.display = 'block';
+    
+    // Grab actual behavior data for the scan
+    const bData = window.ReverseTest.Goldilocks.getBehaviorData();
+    const entropy = bData.mouseEntropy.toFixed(3);
+    const varKs = bData.keystrokeVariance.toFixed(3);
+    const corrects = bData.corrections;
+    const sysTicks = Date.now();
+    
+    const lines = [
+      `INITIATING DEEP BEHAVIORAL SCAN...`,
+      `> SYSTEM_TIME: ${sysTicks}`,
+      `> ANALYZING_MOUSE_TRAJECTORY...`,
+      `> RESULT: MOUSE_ENTROPY = ${entropy}`,
+      `> WARNING: ENTROPY SUB-OPTIMAL FOR ORGANIC LIFEFORM`,
+      `> ANALYZING_KEYSTROKE_CADENCE...`,
+      `> RESULT: VARIANCE = ${varKs}`,
+      `> ERROR: RHYTHM TOO CONSISTENT`,
+      `> CHECKING ERROR_RATE: ${corrects} BACKSPACES DETECTED`,
+      `> COMPILING_SUSPICION_MATRIX...`,
+      `> SUSPICION_SCORE: 50% AND CLIMBING`,
+      `> OVERRIDING_UI_THEME...`,
+      `> DEPLOYING: SGT_CAPTCHA_PROTOCOL_V4`,
+      `> MILITARY_THEME: ENGAGED`
+    ];
+
+    for (const line of lines) {
+      const el = document.createElement('div');
+      el.textContent = line;
+      if (line.includes('WARNING') || line.includes('ERROR')) el.style.color = '#f00';
+      log.appendChild(el);
+      // Faster scroll
+      await new Promise(r => setTimeout(r, 150 + Math.random() * 100));
+    }
+    
+    await new Promise(r => setTimeout(r, 800)); // Hold on final frame
+    
+    // Phase 3: Screen flash + CRT boot
+    term.style.display = 'none';
     overlay.classList.add('rt-theme-flash');
     await new Promise(r => setTimeout(r, 200));
     overlay.classList.remove('rt-theme-flash');
@@ -235,7 +281,7 @@
     await new Promise(r => setTimeout(r, 100));
     overlay.classList.remove('rt-theme-flash');
 
-    // Phase 3: Swap to military theme
+    // Phase 4: Swap to military theme
     overlay.classList.remove('rt-theme-normal', 'rt-theme-glitching');
     overlay.classList.add('rt-theme-military');
     currentTheme = 'military';
@@ -271,6 +317,19 @@
   function showBanScreen(reason) {
     const overlay = shadowRoot.getElementById('rt-overlay');
     if (!overlay) return;
+    document.body.style.overflow = 'hidden';
+    
+    // Add screen shake class
+    const overlayDiv = shadowRoot.getElementById('rt-overlay');
+    if (overlayDiv) overlayDiv.classList.add('rt-shake');
+
+    pushDashboardEvent(`User reached BAN threshold. Executing lock.`, 'ban');
+    
+    // Spawn particles if module loaded
+    if (window.ReverseTest.Particles) {
+      window.ReverseTest.Particles.spawn('ban', shadowRoot);
+    }
+    
     window.ReverseTest.Audio.sfx.ban();
     window.ReverseTest.Audio.sfx.alarm();
     window.ReverseTest.Audio.speak("SECURITY BREACH! BAN HAMMER ACTIVATED!", 'furious');
@@ -293,6 +352,12 @@
     if (!overlay) return;
     window.ReverseTest.Audio.sfx.success();
     window.ReverseTest.Audio.speak("Fine. You may enter. But I will be watching. ALWAYS watching.", 'grudging');
+
+    pushDashboardEvent(`User passed all levels successfully.`, 'system');
+    
+    if (window.ReverseTest.Particles) {
+      window.ReverseTest.Particles.spawn('success', shadowRoot);
+    }
 
     const success = document.createElement('div');
     success.className = 'rt-success-screen';
@@ -342,6 +407,8 @@
     const cont = shadowRoot.getElementById('rt-challenge-container');
     if (!cont) return;
 
+    pushDashboardEvent(`Level ${index + 1} started`, 'level');
+
     const isNormal = index < TRANSITION_AFTER;
     const emotion = EMOTIONS[Math.min(index, EMOTIONS.length - 1)];
 
@@ -374,7 +441,11 @@
 
       // Fire Gemma for next level's intro in background (no await)
       window.ReverseTest.API.getInsult({
-        level: index + 1, action: 'intro', levelName: level.name, emotion
+        level: index + 1, 
+        action: 'intro', 
+        levelName: level.name, 
+        emotion,
+        behavior: window.ReverseTest.Goldilocks?.getBehaviorData()
       }).catch(() => {});
 
       await new Promise(r => setTimeout(r, 200));
@@ -403,7 +474,10 @@
 
       if (evaluation.verdict === 'BAN') {
         const reason = await window.ReverseTest.API.getInsult({
-          level: index + 1, score: evaluation.suspicionScore, action: 'ban'
+          level: index + 1, 
+          score: evaluation.suspicionScore, 
+          action: 'ban',
+          behavior: window.ReverseTest.Goldilocks.getBehaviorData()
         });
         showBanScreen(reason);
         return;
@@ -428,8 +502,26 @@
         const failLine = FAIL_LINES[Math.min(index, FAIL_LINES.length - 1)];
         const fallback = (result.passed || result.humanFailure) ? passLine : failLine;
 
-        const reactionAudio = window.ReverseTest.Audio.speak(fallback, emotion);
-        await typeText(fallback, 'rt-sgt-text', Math.min(index, 4));
+        // ── LIVE GEMMA COMMENTARY WITH BEHAVIOR DATA ──
+        const actionStr = (result.passed || result.humanFailure) ? 'pass' : 'fail';
+        const behaviorData = window.ReverseTest.Goldilocks.getBehaviorData();
+        
+        let reactionText = fallback;
+        try {
+          reactionText = await window.ReverseTest.API.getInsult({
+            level: index + 1,
+            action: actionStr,
+            emotion,
+            suspicion: evaluation.suspicionScore,
+            elapsed: evaluation.elapsed,
+            behavior: behaviorData
+          });
+        } catch (e) {
+          console.warn("Gemma pass/fail fallback used");
+        }
+
+        const reactionAudio = window.ReverseTest.Audio.speak(reactionText, emotion);
+        await typeText(reactionText, 'rt-sgt-text', Math.min(index, 4));
 
         // Wait up to 600ms for audio — if started, wait for it to finish
         const race = await Promise.race([

@@ -63,6 +63,18 @@ let circlePrevQuadrant = -1;
 let circleQuadrantsHit = new Set(); // quadrants visited in current revolution
 let circleRevolutions = 0;  // completed revolutions
 
+// Squat cycle tracking
+let squatPhase = 'standing'; // 'standing' | 'squatting'
+let squatCycles = 0;
+const SQUAT_REQUIRED_CYCLES = 3;
+
+// March step tracking
+let marchLastLegUp = null;   // 'left' | 'right' | null
+let marchSteps = 0;
+let marchPrevLKneeY = null;
+let marchPrevRKneeY = null;
+const MARCH_REQUIRED_STEPS = 4;
+
 // Consecutive match counter — require N consecutive matching frames
 let consecutiveMatches = 0;
 const MIN_CONSECUTIVE = 3;
@@ -200,11 +212,11 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
     for (const gestureList of recognizedGestures) {
       for (const detected of gestureList) {
         // Only accept high-confidence classifications
-        if (detected.score < 0.65) continue;
+        if (detected.score < 0.75) continue; // Raised from 0.65 — stricter classification
         if (expectedCategories.includes(detected.categoryName)) {
-          // For WAVE: additionally require lateral oscillation
+          // For WAVE: additionally require lateral oscillation + raised hand
           if (g.includes('WAVE') || g.includes('HAND')) {
-            return checkWaveMotion(handLandmarks) ? 1.0 : 0;
+            return checkWaveMotion(handLandmarks, poseResult) ? 1.0 : 0;
           }
           return 1.0; // Gesture classified correctly by ML model
         }
@@ -288,11 +300,40 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
     return 0;
   }
 
-  // ── SQUAT: hips drop to knee level ──
+  // ── SQUAT: full up-down CYCLES required ──
+  // Must squat down (hip drops toward knee) then stand back up. Repeat 3x.
   if (g.includes('SQUAT')) {
     if (pl) {
-      const hip = pl[24], knee = pl[26];
-      return (hip.y > knee.y - 0.06) ? 1.0 : 0;
+      const lHip = pl[23], rHip = pl[24];
+      const lKnee = pl[25], rKnee = pl[26];
+      const hipY = (lHip.y + rHip.y) / 2;
+      const kneeY = (lKnee.y + rKnee.y) / 2;
+      const lShoulder = pl[11], rShoulder = pl[12];
+      const shoulderY = (lShoulder.y + rShoulder.y) / 2;
+
+      // Standing height reference: distance from shoulder to knee
+      const fullHeight = kneeY - shoulderY;
+      // Hip-to-knee ratio: 0 = hip at shoulder level (standing tall), 1 = hip at knee level
+      const hipRatio = (hipY - shoulderY) / (fullHeight || 1);
+
+      // Standing: hip is in upper 55% of body (hipRatio < 0.55)
+      const isStanding = hipRatio < 0.55;
+      // Squatting: hip drops to lower 70%+ (hipRatio > 0.70) — reasonable depth, not sitting
+      const isSquatting = hipRatio > 0.70;
+
+      if (squatPhase === 'standing' && isSquatting) {
+        squatPhase = 'squatting';
+        console.log(`[SQUAT] Down phase detected (ratio: ${hipRatio.toFixed(2)})`);
+      } else if (squatPhase === 'squatting' && isStanding) {
+        squatPhase = 'standing';
+        squatCycles++;
+        console.log(`[SQUAT] Cycle ${squatCycles}/${SQUAT_REQUIRED_CYCLES} completed`);
+      }
+
+      // Give credit once enough cycles done, or mid-cycle after threshold
+      if (squatCycles >= SQUAT_REQUIRED_CYCLES) return 1.0;
+      if (squatCycles >= SQUAT_REQUIRED_CYCLES - 1 && isSquatting) return 1.0; // mid-final-cycle
+      return 0;
     }
     return 0;
   }
@@ -335,11 +376,55 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
     return 0;
   }
 
-  // ── MARCH: alternating knee heights ──
+  // ── MARCH: alternating leg lifts with step counting ──
+  // Tracks left/right knee lifts alternating. Also checks arm swing.
   if (g.includes('MARCH')) {
     if (pl) {
-      const lk = pl[25], rk = pl[26];
-      return (Math.abs(lk.y - rk.y) > 0.08) ? 1.0 : 0;
+      const lKnee = pl[25], rKnee = pl[26];
+      const lAnkle = pl[27], rAnkle = pl[28];
+      const lHip = pl[23], rHip = pl[24];
+      const lWrist = pl[15], rWrist = pl[16];
+
+      // Knee lift detection: knee rises significantly relative to hip
+      // In normalized coords, y increases downward, so a lifted knee has lower y
+      const lHipToKnee = lKnee.y - lHip.y; // normally positive (knee below hip)
+      const rHipToKnee = rKnee.y - rHip.y;
+
+      // Also check ankle lift relative to the other ankle
+      const ankleDiff = Math.abs(lAnkle.y - rAnkle.y);
+
+      // A "step" is when one knee lifts notably higher than the other
+      // Threshold: one knee-hip distance is notably shorter (knee lifted)
+      const leftLifted = lHipToKnee < rHipToKnee - 0.04 && ankleDiff > 0.03;
+      const rightLifted = rHipToKnee < lHipToKnee - 0.04 && ankleDiff > 0.03;
+
+      // Optional: arm swing check (opposite arm forward when leg lifts)
+      // Not strictly required but gives bonus confidence
+      const armSwing = Math.abs(lWrist.y - rWrist.y) > 0.03;
+
+      if (leftLifted && marchLastLegUp !== 'left') {
+        if (marchLastLegUp === 'right') {
+          marchSteps++;
+          console.log(`[MARCH] Step ${marchSteps}/${MARCH_REQUIRED_STEPS} (L)${armSwing ? ' +arm' : ''}`);
+        }
+        marchLastLegUp = 'left';
+      } else if (rightLifted && marchLastLegUp !== 'right') {
+        if (marchLastLegUp === 'left') {
+          marchSteps++;
+          console.log(`[MARCH] Step ${marchSteps}/${MARCH_REQUIRED_STEPS} (R)${armSwing ? ' +arm' : ''}`);
+        }
+        marchLastLegUp = 'right';
+      }
+
+      // First detection: set initial leg without counting a step
+      if (marchLastLegUp === null) {
+        if (leftLifted) marchLastLegUp = 'left';
+        else if (rightLifted) marchLastLegUp = 'right';
+      }
+
+      if (marchSteps >= MARCH_REQUIRED_STEPS) return 1.0;
+      if (marchSteps >= MARCH_REQUIRED_STEPS - 1 && (leftLifted || rightLifted)) return 1.0;
+      return 0;
     }
     return 0;
   }
@@ -356,21 +441,31 @@ function findExpectedCategories(gesture) {
   return null;
 }
 
-// Check wave motion: Open_Palm detected + wrist oscillating laterally
-function checkWaveMotion(handLandmarks) {
+// Check wave motion: Open_Palm detected + wrist oscillating laterally + hand above shoulder
+function checkWaveMotion(handLandmarks, poseResult) {
   if (!handLandmarks || handLandmarks.length === 0) return false;
   const wrist = handLandmarks[0][0];
+
+  // Hand must be raised (above shoulder level) — prevents static palm-down detection
+  const pl = poseResult?.landmarks?.[0];
+  if (pl) {
+    const shoulderY = Math.min(pl[11].y, pl[12].y);
+    // Wrist must be above or near shoulder height (lower y = higher in frame)
+    if (wrist.y > shoulderY + 0.05) return false; // hand too low, not waving
+  }
+
   if (prevWristX !== null) {
     const dx = wrist.x - prevWristX;
-    const dir = dx > 0.010 ? 1 : dx < -0.010 ? -1 : 0;
+    // Increased threshold: 0.015 (up from 0.010) to require more deliberate motion
+    const dir = dx > 0.015 ? 1 : dx < -0.015 ? -1 : 0;
     if (dir !== 0 && dir !== lastWaveDir) {
       waveOscillations++;
       lastWaveDir = dir;
     }
   }
   prevWristX = wrist.x;
-  // Need at least 2 direction changes to confirm actual waving
-  return waveOscillations >= 2;
+  // Need at least 3 direction changes to confirm actual waving (up from 2)
+  return waveOscillations >= 3;
 }
 
 // ══════════════════════════════════════════════════
