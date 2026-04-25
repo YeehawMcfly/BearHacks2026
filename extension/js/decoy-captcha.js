@@ -3,6 +3,9 @@
  * Flow: click → … → tab overload → black + “Not so fast” type → dwell → apex → SGT. overlay latches in.
  */
 (function () {
+  // Pre-cache URL immediately — getURL fails if context is invalidated during the async flow
+  let LOGO_URL = '';
+  try { LOGO_URL = chrome.runtime.getURL('assets/recaptcha-logo/RecaptchaLogo.svg.png'); } catch (_) {}
   /** Spinning “verifying” phase before the X (reCAPTCHA-like). */
   const VERIFY_MS = 2200;
   /** Post-X wait before the tab cascade. */
@@ -130,7 +133,7 @@
   }
 
   function getHTML() {
-    const logoUrl = chrome.runtime.getURL('assets/recaptcha-logo/RecaptchaLogo.svg.png');
+    const logoUrl = LOGO_URL;
     return `
       <div class="rt-decoy-root">
         <div class="rt-decoy-preface" id="rt-decoy-preface" style="display:none" aria-hidden="true">
@@ -215,7 +218,7 @@
       return;
     }
 
-    const logoUrl = chrome.runtime.getURL('assets/recaptcha-logo/RecaptchaLogo.svg.png');
+    const logoUrl = LOGO_URL;
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let done = false;
     btn.addEventListener('click', async () => {
@@ -233,16 +236,9 @@
       }
 
       await delay(HOLD_AFTER_X_MS);
-      await runTabCascade(shadow, logoUrl, reduceMotion);
 
-      const root = shadow.querySelector('.rt-decoy-root');
-      if (root) {
-        root.classList.add('rt-decoy-root--glitch');
-        await typeNotSoFast(shadow, reduceMotion);
-        await delay(reduceMotion ? POST_TYPE_BLACK_HOLD_MS_REDUCED : POST_TYPE_BLACK_HOLD_MS);
-        root.classList.add('rt-decoy-root--glitch-apex');
-        await delay(reduceMotion ? TAKEOVER_MS_REDUCED : TAKEOVER_MS);
-      }
+      // Skip the tab cascade — the real transition happens after Level 2
+      await delay(400);
 
       await Promise.resolve(onDone());
     });

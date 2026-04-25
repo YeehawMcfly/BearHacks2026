@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#000; overflow:hidden; width:100vw; height:100vh; }
+  canvas { position:absolute; top:0; left:0; width:100%; height:100%; }
+  #overlay-canvas { z-index:2; pointer-events:none; }
+  video { display:none; }
+  #status {
+    position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
+    font-family:monospace; font-size:11px; color:#06b6d4;
+    text-shadow:0 0 6px rgba(6,182,212,0.8); z-index:3;
+    white-space:nowrap; pointer-events:none;
+  }
+  #load-status {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    font-family:monospace; font-size:12px; color:#06b6d4; text-align:center;
+    text-shadow:0 0 8px rgba(6,182,212,0.8); z-index:4; pointer-events:none;
+  }
+</style>
+</head><body>
+<video id="video" playsinline muted autoplay></video>
+<canvas id="video-canvas"></canvas>
+<canvas id="overlay-canvas"></canvas>
+<div id="status">INITIALIZING...</div>
+<div id="load-status">LOADING BIOMETRIC SCANNER<br><span id="load-sub" style="font-size:10px;color:#94a3b8;"></span></div>
+<script src="js/camera-worker.js" type="module"></script>
+</body></html>
