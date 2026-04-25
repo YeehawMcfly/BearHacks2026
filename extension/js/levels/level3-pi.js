@@ -33,7 +33,7 @@
     startTime = performance.now();
 
     container.innerHTML = `
-      <div class="rt-challenge-title">LEVEL 3 — COGNITIVE RECALL</div>
+      <div class="rt-challenge-title">COGNITIVE RECALL</div>
       <div class="rt-challenge-subtitle">Recite the first 20 digits of Pi (no decimal point). You have ${TIME_LIMIT} seconds. <strong style="color:var(--accent-red)">GO.</strong></div>
       <div class="rt-challenge-content">
         <div class="rt-pi-display" id="rt-pi-hint">π = 3._ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _</div>

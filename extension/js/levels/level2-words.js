@@ -86,7 +86,7 @@
     targetWord = WORDS[Math.floor(Math.random() * WORDS.length)];
 
     container.innerHTML = `
-      <div class="rt-challenge-title">LEVEL 2 — OPTICAL VERIFICATION</div>
+      <div class="rt-challenge-title">OPTICAL VERIFICATION</div>
       <div class="rt-challenge-subtitle">Type the distorted word exactly as shown</div>
       <div class="rt-challenge-content">
         <div class="rt-distorted-wrap">

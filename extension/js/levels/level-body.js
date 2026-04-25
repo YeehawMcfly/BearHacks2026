@@ -36,7 +36,7 @@
     currentAction = ACTIONS[Math.floor(Math.random() * ACTIONS.length)];
 
     container.innerHTML = `
-      <div class="rt-challenge-title" style="color:var(--accent-red)">LEVEL 7 — PHYSICAL VERIFICATION</div>
+      <div class="rt-challenge-title" style="color:var(--accent-red)">PHYSICAL VERIFICATION</div>
       <div class="rt-challenge-subtitle">
         <span style="font-size:28px">${currentAction.emoji}</span><br>
         ${currentAction.instruction}
