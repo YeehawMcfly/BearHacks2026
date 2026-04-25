@@ -443,6 +443,107 @@
   -webkit-font-smoothing: antialiased;
   z-index: 5;
   animation: fadeIn 0.35s ease-out;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* Failure → handoff: VHS/CRT-style corruption (full-bleed, then SGT. overlay). */
+.rt-decoy-root--glitch {
+  background: #000;
+  transition: background 0.12s ease;
+}
+.rt-decoy-root--glitch::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.35) 0px,
+    rgba(0, 0, 0, 0.35) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: multiply;
+  animation: decoyScanlineDrift 1.2s linear infinite;
+}
+.rt-decoy-root--glitch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.4;
+  background:
+    linear-gradient(90deg, rgba(255, 0, 100, 0.12) 0%, transparent 40%, rgba(0, 255, 255, 0.1) 100%),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 18px,
+      rgba(0, 80, 255, 0.15) 18px,
+      rgba(0, 80, 255, 0.15) 20px
+    );
+  mix-blend-mode: screen;
+  animation: decoyBlockTear 0.45s steps(1) infinite;
+}
+.rt-decoy-root--glitch .rt-decoy-card {
+  position: relative;
+  z-index: 3;
+  border-color: #444;
+  box-shadow:
+    0 0 0 1px rgba(0, 255, 255, 0.25),
+    2px 0 0 0 rgba(255, 0, 100, 0.35),
+    -2px 0 0 0 rgba(0, 255, 255, 0.3);
+  animation: decoyWidgetGlitch 0.09s steps(2) infinite;
+}
+.rt-decoy-root--glitch .rt-decoy-check--fail {
+  box-shadow: inset 0 0 0 1px rgba(255, 80, 80, 0.4);
+  filter: drop-shadow(1px 0 0 rgba(255, 0, 0, 0.9)) drop-shadow(-1px 0 0 rgba(0, 255, 255, 0.85));
+}
+.rt-decoy-root--glitch .rt-decoy-label,
+.rt-decoy-root--glitch .rt-decoy-legal,
+.rt-decoy-root--glitch .rt-decoy-link {
+  text-shadow: 1px 0 0 rgba(255, 0, 100, 0.75), -1px 0 0 rgba(0, 255, 255, 0.7);
+}
+.rt-decoy-root--glitch .rt-decoy-recaptcha-logo {
+  filter: drop-shadow(2px 0 0 #ff1a5c) drop-shadow(-2px 0 0 #00e5ff) contrast(1.2);
+  animation: decoyLogoShake 0.1s steps(1) infinite;
+}
+@keyframes decoyScanlineDrift {
+  0% { transform: translateY(0); opacity: 0.85; }
+  100% { transform: translateY(6px); opacity: 1; }
+}
+@keyframes decoyBlockTear {
+  0% { transform: translateX(0); clip-path: inset(0 0 0 0); }
+  20% { transform: translateX(-4px); clip-path: inset(12% 0 55% 0); }
+  40% { transform: translateX(3px); clip-path: inset(40% 0 30% 0); }
+  60% { transform: translateX(-2px); clip-path: inset(70% 0 5% 0); }
+  80% { transform: translateX(5px); clip-path: inset(0 0 30% 0); }
+  100% { transform: translateX(0); clip-path: inset(0 0 0 0); }
+}
+@keyframes decoyWidgetGlitch {
+  0% { transform: translate(0, 0) skewX(0); filter: none; }
+  20% { transform: translate(3px, -1px) skewX(0.6deg); filter: contrast(1.12) brightness(0.95); }
+  40% { transform: translate(-4px, 2px) skewX(-0.5deg); filter: contrast(1.2) brightness(1.05); }
+  60% { transform: translate(2px, 1px); filter: contrast(0.95) brightness(0.9); }
+  80% { transform: translate(-2px, -2px) skewX(0.3deg); filter: contrast(1.15); }
+  100% { transform: translate(0, 0) skewX(0); filter: none; }
+}
+@keyframes decoyLogoShake {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(1px, -1px) scale(1.02); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rt-decoy-root--glitch::before,
+  .rt-decoy-root--glitch::after,
+  .rt-decoy-root--glitch .rt-decoy-card,
+  .rt-decoy-root--glitch .rt-decoy-recaptcha-logo {
+    animation: none;
+  }
+  .rt-decoy-root--glitch .rt-decoy-card {
+    filter: contrast(1.1);
+    box-shadow: 0 0 0 1px rgba(255, 0, 100, 0.35), 2px 0 0 0 rgba(255, 0, 100, 0.25);
+  }
 }
 .rt-decoy-card {
   background: #ffffff;

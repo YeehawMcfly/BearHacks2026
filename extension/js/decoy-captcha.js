@@ -6,6 +6,9 @@
   /** Spinning “verifying” phase before the X (reCAPTCHA-like). */
   const VERIFY_MS = 2200;
   const HOLD_AFTER_X_MS = 1600;
+  /** CRT / chromatic “system failure” beat before the real captcha. */
+  const GLITCH_MS = 1200;
+  const GLITCH_MS_REDUCED = 240;
 
   function getHTML() {
     const logoUrl = chrome.runtime.getURL('assets/recaptcha-logo/RecaptchaLogo.svg.png');
@@ -71,6 +74,13 @@
       }
 
       await delay(HOLD_AFTER_X_MS);
+
+      const root = shadow.querySelector('.rt-decoy-root');
+      if (root) {
+        root.classList.add('rt-decoy-root--glitch');
+        const reduceGlitch = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        await delay(reduceGlitch ? GLITCH_MS_REDUCED : GLITCH_MS);
+      }
 
       await Promise.resolve(onDone());
     });
