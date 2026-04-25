@@ -72,8 +72,8 @@ export async function buildLevel1Remote(missionId, pexelsKey) {
   const topic = getTopic(missionId);
   if (!topic) return null;
 
-  // 7 or 8 matching tiles, only 1–2 decoys: majority is the answer
-  const kPos = 7 + Math.floor(Math.random() * 2);
+  // 2–4 topic-correct tiles per round
+  const kPos = 2 + Math.floor(Math.random() * 3);
   const nNeg = 9 - kPos;
 
   let posUrls = [];

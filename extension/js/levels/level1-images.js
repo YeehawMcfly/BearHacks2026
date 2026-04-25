@@ -4,11 +4,7 @@
  * Fallback: LoremFlickr-only when server unreachable (topic list mirrors server/level1Topics.mjs).
  */
 (function () {
-  const OFFLINE_TOPICS = {
-    hydrant: { label: 'a fire hydrant', loremTag: 'fire,hydrant' },
-    donut: { label: 'a donut', loremTag: 'donut,dessert' },
-    traffic: { label: 'a traffic light', loremTag: 'traffic,light' }
-  };
+  const HYDRANT = { label: 'a fire hydrant', loremTag: 'fire,hydrant' };
   const OFFLINE_NEG_TAGS = [
     'shark,underwater', 'penguin,ice', 'volcano,lava', 'galaxy,space', 'desert,landscape', 'eagle,mountain', 'medusa,ocean'
   ];
@@ -33,22 +29,18 @@
     return a;
   }
 
-  /** Same 1–5 positives + shuffle as server/level1Remote.mjs when API is unavailable. */
-  function buildOfflineChallenge(missionId) {
-    const ids = Object.keys(OFFLINE_TOPICS);
-    const mid = (missionId && OFFLINE_TOPICS[missionId] ? missionId : ids[Math.floor(Math.random() * ids.length)]);
-    const topic = OFFLINE_TOPICS[mid];
-    if (!topic) return null;
-    const kPos = 7 + Math.floor(Math.random() * 2);
+  /** Fire hydrant only; same ratio as server/level1Remote.mjs when API is unavailable. */
+  function buildOfflineChallenge() {
+    const kPos = 2 + Math.floor(Math.random() * 3);
     const nNeg = 9 - kPos;
     const lock0 = (Date.now() % 200000) + Math.floor(Math.random() * 1000);
     const posUrls = [];
     for (let p = 0; p < kPos; p++) {
-      posUrls.push(loremFlickrUrl(topic.loremTag, lock0 + p * 17));
+      posUrls.push(loremFlickrUrl(HYDRANT.loremTag, lock0 + p * 17));
     }
     const negUrls = [];
     for (let q = 0; q < nNeg; q++) {
-      const tag = OFFLINE_NEG_TAGS[(q + mid.length) % OFFLINE_NEG_TAGS.length];
+      const tag = OFFLINE_NEG_TAGS[q % OFFLINE_NEG_TAGS.length];
       negUrls.push(loremFlickrUrl(tag, lock0 + 500 + q * 19));
     }
     const tiles = [
@@ -62,8 +54,8 @@
       if (tiles[i].isPositive) correctIndices.push(i);
     }
     return {
-      missionId: mid,
-      label: topic.label,
+      missionId: 'hydrant',
+      label: HYDRANT.label,
       line1: 'Select all images that contain',
       imageUrls,
       correctIndices
@@ -176,7 +168,7 @@
     (async () => {
       let data = await window.ReverseTest.API.getLevel1Captcha();
       if (!data || !data.imageUrls || data.imageUrls.length !== 9) {
-        data = buildOfflineChallenge(null);
+        data = buildOfflineChallenge();
       }
       if (!data || !data.imageUrls || data.imageUrls.length !== 9) {
         cont.innerHTML = '<div class="rt-l1-normal-wrap"><p>Could not load challenge.</p></div>';

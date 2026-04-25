@@ -28,7 +28,7 @@
   // ── TEXT ESCALATION ──
   // Act I (normal, calm)
   const NORMAL_INTROS = [
-    "Select every square that shows the object named below (almost all of them will match).",
+    "Select every square with a fire hydrant.",
     "Type the word shown below to verify you're human."
   ];
   // Act II (military, escalating)
@@ -515,6 +515,16 @@
         return;
       }
 
+      // Level 1: correct image selection must advance to L2 (do not let suspicion/BAN run first)
+      if (isNormal && index === 0 && (result.passed || result.humanFailure)) {
+        window.ReverseTest.Goldilocks.evaluate(result);
+        if (currentTheme === 'military') updateThreat(window.ReverseTest.Goldilocks.getScore());
+        window.ReverseTest.Audio.sfx.success();
+        mod.cleanup();
+        startLevel(1);
+        return;
+      }
+
       const evaluation = window.ReverseTest.Goldilocks.evaluate(result);
       if (currentTheme === 'military') updateThreat(evaluation.suspicionScore);
 
@@ -526,14 +536,6 @@
           behavior: window.ReverseTest.Goldilocks.getBehaviorData()
         });
         showBanScreen(reason);
-        return;
-      }
-
-      // Level 1 (image captcha): one pass then Level 2 — no "Verified" interstitial or delay
-      if (isNormal && index === 0 && (result.passed || result.humanFailure)) {
-        window.ReverseTest.Audio.sfx.success();
-        mod.cleanup();
-        startLevel(1);
         return;
       }
 

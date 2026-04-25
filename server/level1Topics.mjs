@@ -1,5 +1,5 @@
 /**
- * Level 1 challenge topics: fixed allowlist (labels + Pexels / LoremFlickr tags)
+ * Level 1: single topic for now (fire hydrant) — Pexels / LoremFlickr
  */
 export const TOPICS = {
   hydrant: {
@@ -7,18 +7,6 @@ export const TOPICS = {
     label: 'a fire hydrant',
     pexelsQuery: 'red yellow fire hydrant on sidewalk',
     loremTag: 'fire,hydrant'
-  },
-  donut: {
-    id: 'donut',
-    label: 'a donut',
-    pexelsQuery: 'round frosted sprinkles donuts bakery',
-    loremTag: 'donut,dessert'
-  },
-  traffic: {
-    id: 'traffic',
-    label: 'a traffic light',
-    pexelsQuery: 'vertical traffic light red green yellow day',
-    loremTag: 'traffic,light'
   }
 };
 

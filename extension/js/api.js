@@ -1,7 +1,7 @@
 /**
  * API Client — talks to our Express backend for Gemma 4 + ElevenLabs.
  * Falls back to local data if server is unreachable.
- * Gemma is used for: every SGT line, Level 1 mission pick (optional), word choices,
+ * Gemma is used for: every SGT line, word choices,
  *   chess puzzles, gesture picks, body exercise picks, and final verdicts.
  */
 (function () {
@@ -77,7 +77,7 @@
       return { verdict: 'HUMAN', confidence: 0.7, reason: 'Acceptably pathetic.' };
     },
 
-    /** Level 1: image URL grid from server (Pexels + LoremFlickr); Gemma can pick the mission. */
+    /** Level 1: fire-hydrant image grid from server (Pexels + LoremFlickr). */
     async getLevel1Captcha() {
       const r = await post('/api/ai/level1-captcha', {});
       if (r) return (await r.json());

@@ -4,7 +4,6 @@ import cors from 'cors';
 import { GoogleGenAI } from '@google/genai';
 import { Chess } from 'chess.js';
 import os from 'os';
-import { TOPIC_IDS } from './level1Topics.mjs';
 import { buildLevel1Remote } from './level1Remote.mjs';
 
 const app = express();
@@ -157,42 +156,11 @@ app.post('/api/ai/evaluate', async (req, res) => {
   }
 });
 
-// ===== Level 1: Gemma may pick mission; Pexels +/or LoremFlickr build 9-tile challenge (1–5 positives) =====
+// ===== Level 1: fire hydrant only; Pexels +/or LoremFlickr build 9-tile challenge =====
 app.post('/api/ai/level1-captcha', async (req, res) => {
   try {
-    const missionIds = TOPIC_IDS;
-    let missionId = null;
-    let line1 = 'Select all images that contain';
-    let gemmaPicked = false;
-    if (ai) {
-      try {
-        const idList = missionIds.map((id) => JSON.stringify(id)).join(', ');
-        const prompt = `${getPrompt('calm')}
-
-You are scheduling the next image verification challenge. The allowed mission ids are exactly: ${idList}
-Respond with JSON only, no markdown fences, no other text: { "missionId": "<id>", "line1": "<optional short instruction line, or omit>" }
-missionId MUST be one of the allowed ids exactly. The default first line of the task is: Select all images that contain
-If you omit line1, the client will use that default. If you set line1, keep it under 80 characters.`;
-        const response = await ai.models.generateContent({
-          model: 'gemma-4-26b-a4b-it',
-          contents: prompt
-        });
-        let text = response.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        const parsed = JSON.parse(text);
-        if (typeof parsed.missionId === 'string' && missionIds.includes(parsed.missionId)) {
-          missionId = parsed.missionId;
-          gemmaPicked = true;
-        }
-        if (typeof parsed.line1 === 'string' && parsed.line1.length > 0 && parsed.line1.length < 120) {
-          line1 = parsed.line1.trim();
-        }
-      } catch (e) {
-        console.warn('Gemma level1-captcha pick failed, using random mission:', e.message);
-      }
-    }
-    if (!missionId) {
-      missionId = missionIds[Math.floor(Math.random() * missionIds.length)];
-    }
+    const missionId = 'hydrant';
+    const line1 = 'Select all images that contain';
     const pexelsKey = process.env.PEXELS_API_KEY && process.env.PEXELS_API_KEY !== 'your_pexels_key_here'
       ? process.env.PEXELS_API_KEY
       : undefined;
@@ -206,7 +174,7 @@ If you omit line1, the client will use that default. If you set line1, keep it u
       missionId: built.missionId,
       imageUrls: built.imageUrls,
       correctIndices: built.correctIndices,
-      gemma: gemmaPicked
+      gemma: false
     });
   } catch (e) {
     console.error('level1-captcha error:', e);
