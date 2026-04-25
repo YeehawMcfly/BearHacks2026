@@ -19,6 +19,7 @@
         "js/levels/level3-pi.js",
         "js/levels/level4-math.js",
         "js/submit-chaos.js",
+        "js/decoy-captcha.js",
         "js/overlay.js",
         "content.js"
       ],
@@ -40,7 +41,12 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["styles/overlay.css", "assets/*", "fonts/*"],
+      "resources": [
+        "styles/overlay.css",
+        "assets/*",
+        "assets/recaptcha-logo/RecaptchaLogo.svg.png",
+        "fonts/*"
+      ],
       "matches": ["<all_urls>"]
     }
   ]

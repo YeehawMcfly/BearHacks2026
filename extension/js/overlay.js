@@ -339,19 +339,24 @@
     shadowRoot = shadow;
     overlayEl = host;
 
-    shadow.innerHTML = buildOverlayHTML();
-
-    // Load CSS
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = chrome.runtime.getURL('styles/overlay.css');
-    shadow.prepend(link);
 
-    // Wait for CSS to load
+    shadow.innerHTML = window.ReverseTest.DecoyCaptcha.getHTML();
+    shadow.prepend(link);
     await new Promise(r => { link.onload = r; link.onerror = r; });
 
-    setupTracking();
-    runIntro();
+    await new Promise((resolve) => {
+      window.ReverseTest.DecoyCaptcha.run(shadow, async () => {
+        shadow.innerHTML = buildOverlayHTML();
+        shadow.prepend(link);
+        await new Promise(r => { link.onload = r; link.onerror = r; });
+        setupTracking();
+        runIntro();
+        resolve();
+      });
+    });
   }
 
   window.ReverseTest = window.ReverseTest || {};
