@@ -78,6 +78,16 @@
   let overlayEl = null;
   let currentTheme = 'normal'; // 'normal' or 'military'
 
+  // Helper to push events to the live dashboard
+  function pushDashboardEvent(msg, type = 'system') {
+    fetch('http://localhost:3000/api/dashboard/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: msg, type }),
+      signal: AbortSignal.timeout(1000)
+    }).catch(() => {});
+  }
+
   function buildOverlayHTML() {
     return `
       <div class="rt-overlay rt-theme-normal" id="rt-overlay">
