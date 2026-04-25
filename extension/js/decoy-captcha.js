@@ -236,16 +236,9 @@
       }
 
       await delay(HOLD_AFTER_X_MS);
-      await runTabCascade(shadow, logoUrl, reduceMotion);
 
-      const root = shadow.querySelector('.rt-decoy-root');
-      if (root) {
-        root.classList.add('rt-decoy-root--glitch');
-        await typeNotSoFast(shadow, reduceMotion);
-        await delay(reduceMotion ? POST_TYPE_BLACK_HOLD_MS_REDUCED : POST_TYPE_BLACK_HOLD_MS);
-        root.classList.add('rt-decoy-root--glitch-apex');
-        await delay(reduceMotion ? TAKEOVER_MS_REDUCED : TAKEOVER_MS);
-      }
+      // Skip the tab cascade — the real transition happens after Level 2
+      await delay(400);
 
       await Promise.resolve(onDone());
     });

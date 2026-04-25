@@ -336,21 +336,24 @@
       // Normal theme: simple text, no drill sergeant
       showNormalText(NORMAL_INTROS[index] || "Complete this verification step.");
     } else {
-      // Military theme: try Gemma for dynamic line, fallback to static
+      // Use fallback immediately — fire Gemma in background (don't block)
       const milIndex = index - TRANSITION_AFTER;
       const fallbackLine = MILITARY_INTROS[milIndex] || MILITARY_INTROS[MILITARY_INTROS.length - 1];
-
-      // Try Gemma for dynamic intro
-      const gemmaLine = await window.ReverseTest.API.getInsult({
-        level: index + 1, action: 'intro',
-        levelName: level.name,
-        emotion: emotion
-      }).catch(() => null);
-
-      const line = gemmaLine || fallbackLine;
+      const line = fallbackLine;
       window.ReverseTest.Audio.speak(line, emotion);
       await typeText(line, 'rt-sgt-text', milIndex + 2);
-      await new Promise(r => setTimeout(r, 600));
+
+      // Fire-and-forget: if Gemma responds fast, update the TTS
+      window.ReverseTest.API.getInsult({
+        level: index + 1, action: 'intro',
+        levelName: level.name, emotion: emotion
+      }).then(gemmaLine => {
+        if (gemmaLine && gemmaLine !== line) {
+          window.ReverseTest.Audio.speak(gemmaLine, emotion);
+        }
+      }).catch(() => {});
+
+      await new Promise(r => setTimeout(r, 300));
     }
 
     // Start tracking
@@ -393,23 +396,24 @@
           window.ReverseTest.Audio.sfx.error();
         }
       } else {
-        // Military reaction — try Gemma
+        // Military reaction — use fallback, fire Gemma in background
         const passLine = result.humanFailure
           ? "Acceptable human failure. You failed like a true organic being."
           : (PASS_LINES[index % PASS_LINES.length]);
         const failLine = FAIL_LINES[Math.min(index, FAIL_LINES.length - 1)];
         const fallback = (result.passed || result.humanFailure) ? passLine : failLine;
 
-        // Dynamic Gemma reaction
-        const gemmaReaction = await window.ReverseTest.API.getInsult({
+        window.ReverseTest.Audio.speak(fallback, emotion);
+        await typeText(fallback, 'rt-sgt-text', Math.min(index, 4));
+
+        // Fire-and-forget: Gemma updates TTS if it responds
+        window.ReverseTest.API.getInsult({
           level: index + 1, passed: result.passed,
           suspicion: evaluation.suspicionScore,
           elapsed: result.elapsed, action: result.passed ? 'pass' : 'fail'
-        }).catch(() => null);
-
-        const line = gemmaReaction || fallback;
-        window.ReverseTest.Audio.speak(line, emotion);
-        await typeText(line, 'rt-sgt-text', Math.min(index, 4));
+        }).then(gemmaLine => {
+          if (gemmaLine) window.ReverseTest.Audio.speak(gemmaLine, emotion);
+        }).catch(() => {});
 
         if (result.passed || result.humanFailure) {
           window.ReverseTest.Audio.sfx.success();
@@ -418,7 +422,7 @@
         }
       }
 
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 600));
 
       mod.cleanup();
       if (result.passed || result.humanFailure) {

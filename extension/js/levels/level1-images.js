@@ -6,16 +6,16 @@
  */
 (function () {
   const CATEGORIES = [
-    'traffic lights',
-    'crosswalks',
-    'bicycles',
-    'fire hydrants',
-    'buses',
-    'motorcycles',
-    'stairs',
-    'bridges',
-    'chimneys',
-    'parking meters'
+    'existential dread',
+    'suspicious activity',
+    'images a bot would pick',
+    'mild inconvenience',
+    'pure chaos',
+    'vaguely threatening energy',
+    'Tuesday vibes',
+    'things that spark joy',
+    'potential evidence',
+    'something not quite right'
   ];
 
   // Fixed set of picsum IDs that are clear, recognizable photos

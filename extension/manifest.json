@@ -46,6 +46,7 @@
     {
       "resources": [
         "styles/overlay.css",
+        "camera.html",
         "assets/*",
         "assets/recaptcha-logo/RecaptchaLogo.svg.png",
         "fonts/*"

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#000; overflow:hidden; }
+  canvas { width:100%; height:100%; display:block; }
+</style>
+</head><body>
+<canvas id="canvas"></canvas>
+<script type="module">
+import { PoseLandmarker, HandLandmarker, FilesetResolver, DrawingUtils }
+  from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs';
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let poseLandmarker = null;
+let handLandmarker = null;
+let stream = null;
+let video = null;
+let running = false;
+
+// Get gesture from URL params
+const params = new URLSearchParams(window.location.search);
+const gesture = params.get('gesture') || 'WAVE';
+const motionReq = parseInt(params.get('frames') || '35');
+const threshold = parseFloat(params.get('threshold') || '0.03');
+
+let accumulatedScore = 0;
+let lastTime = performance.now();
+
+async function init() {
+  try {
+    const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm'
+    );
+
+    poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+        delegate: 'GPU'
+      },
+      runningMode: 'VIDEO',
+      numPoses: 1
+    });
+
+    handLandmarker = await HandLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+        delegate: 'GPU'
+      },
+      runningMode: 'VIDEO',
+      numHands: 2
+    });
+
+    parent.postMessage({ event: 'ready' }, '*');
+  } catch (err) {
+    parent.postMessage({ event: 'error', message: err.message }, '*');
+  }
+}
+
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' }, audio: false
+    });
+    video = document.createElement('video');
+    video.srcObject = stream;
+    video.setAttribute('playsinline', '');
+    video.muted = true;
+    await video.play();
+
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+
+    running = true;
+    parent.postMessage({ event: 'camera-started' }, '*');
+    detectLoop();
+  } catch (err) {
+    parent.postMessage({ event: 'camera-error', message: err.message }, '*');
+  }
+}
+
+function detectLoop() {
+  if (!running) return;
+  requestAnimationFrame(detectLoop);
+
+  const now = performance.now();
+  if (now - lastTime < 33) return; // ~30fps cap
+  lastTime = now;
+
+  if (!video || video.readyState < 2) return;
+
+  // Draw mirrored video
+  ctx.save();
+  ctx.translate(canvas.width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
+  const timestamp = performance.now();
+  let poseResults = null;
+  let handResults = null;
+
+  try {
+    poseResults = poseLandmarker?.detectForVideo(video, timestamp);
+    handResults = handLandmarker?.detectForVideo(video, timestamp);
+  } catch (e) { return; }
+
+  // Draw skeleton
+  const drawUtils = new DrawingUtils(ctx);
+  // Mirror the landmarks for drawing
+  if (poseResults?.landmarks) {
+    for (const landmarks of poseResults.landmarks) {
+      const mirrored = landmarks.map(l => ({ ...l, x: 1 - l.x }));
+      drawUtils.drawConnectors(mirrored, PoseLandmarker.POSE_CONNECTIONS,
+        { color: '#00FF4180', lineWidth: 2 });
+      drawUtils.drawLandmarks(mirrored,
+        { color: '#FF000080', fillColor: '#00FF4140', lineWidth: 1, radius: 3 });
+    }
+  }
+  if (handResults?.landmarks) {
+    for (const landmarks of handResults.landmarks) {
+      const mirrored = landmarks.map(l => ({ ...l, x: 1 - l.x }));
+      drawUtils.drawConnectors(mirrored, HandLandmarker.HAND_CONNECTIONS,
+        { color: '#06B6D480', lineWidth: 2 });
+      drawUtils.drawLandmarks(mirrored,
+        { color: '#FF2D2D80', fillColor: '#06B6D440', lineWidth: 1, radius: 2 });
+    }
+  }
+
+  // Evaluate gesture
+  const score = evaluateGesture(gesture, poseResults, handResults);
+  if (score > 0) accumulatedScore += score;
+
+  const progress = Math.min(accumulatedScore / motionReq, 1);
+  parent.postMessage({
+    event: 'progress',
+    value: progress,
+    detected: score > 0,
+    hasPose: !!(poseResults?.landmarks?.length),
+    hasHands: !!(handResults?.landmarks?.length),
+    score: accumulatedScore,
+    gestureScore: score
+  }, '*');
+
+  if (progress >= 1) {
+    running = false;
+    parent.postMessage({ event: 'complete' }, '*');
+    stopCamera();
+  }
+}
+
+function evaluateGesture(name, pose, hands) {
+  const pl = pose?.landmarks?.[0];
+  const hl = hands?.landmarks;
+  const upper = name.toUpperCase();
+
+  switch (upper) {
+    case 'WAVE YOUR HAND':
+    case 'WAVE':
+      // Hand detected + wrist above hip level
+      if (hl?.length > 0 && pl) {
+        const wrist = hl[0][0]; // hand wrist
+        const hip = pl[24]; // right hip
+        if (wrist.y < hip.y) return 1;
+      }
+      return 0;
+
+    case 'THUMBS UP':
+      // Thumb tip above thumb IP, other fingers curled
+      if (hl?.length > 0) {
+        const thumb_tip = hl[0][4];
+        const thumb_ip = hl[0][3];
+        const index_tip = hl[0][8];
+        const middle_tip = hl[0][12];
+        if (thumb_tip.y < thumb_ip.y && index_tip.y > hl[0][6].y && middle_tip.y > hl[0][10].y) return 1;
+      }
+      return 0;
+
+    case 'CLAP YOUR HANDS':
+    case 'CLAP':
+      // Two hands detected close together
+      if (hl?.length >= 2) {
+        const d = Math.hypot(hl[0][0].x - hl[1][0].x, hl[0][0].y - hl[1][0].y);
+        if (d < 0.15) return 1;
+      }
+      return 0;
+
+    case 'NOD YOUR HEAD':
+    case 'NOD':
+      // Nose moving vertically
+      if (pl) { return 1; } // Pose detected = some credit (simplified)
+      return 0;
+
+    case 'GIVE A SALUTE':
+    case 'SALUTE':
+      // Wrist near forehead
+      if (hl?.length > 0 && pl) {
+        const wrist = hl[0][0];
+        const nose = pl[0];
+        const d = Math.hypot(wrist.x - nose.x, wrist.y - nose.y);
+        if (d < 0.2 && wrist.y < nose.y + 0.1) return 1;
+      }
+      return 0;
+
+    case 'SHAKE YOUR HEAD':
+    case 'HEAD SHAKE':
+      if (pl) return 1; // Simplified — pose detected
+      return 0;
+
+    case 'JUMPING JACKS':
+      // Arms above shoulders + pose detected
+      if (pl) {
+        const lwrist = pl[15], rwrist = pl[16];
+        const lshoulder = pl[11], rshoulder = pl[12];
+        if (lwrist.y < lshoulder.y && rwrist.y < rshoulder.y) return 1;
+        return 0.3; // partial credit for just moving
+      }
+      return 0;
+
+    case 'SQUATS':
+      // Hip below knee level = squat position
+      if (pl) {
+        const hip = pl[24], knee = pl[26];
+        if (hip.y > knee.y - 0.05) return 1;
+        return 0.3;
+      }
+      return 0;
+
+    case 'ARM CIRCLES':
+      // Arms extended = wrists far from shoulders
+      if (pl) {
+        const lwrist = pl[15], rshoulder = pl[12];
+        const d = Math.hypot(lwrist.x - rshoulder.x, lwrist.y - rshoulder.y);
+        if (d > 0.3) return 1;
+        return 0.3;
+      }
+      return 0;
+
+    case 'MARCH IN PLACE':
+    case 'MARCH':
+      if (pl) return 0.5; // any pose = partial credit
+      return 0;
+
+    default:
+      // Generic: any hand or pose detection counts
+      if (hl?.length > 0) return 0.5;
+      if (pl) return 0.3;
+      return 0;
+  }
+}
+
+function stopCamera() {
+  running = false;
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+}
+
+// Listen for commands from parent
+window.addEventListener('message', (e) => {
+  if (e.data?.cmd === 'start') startCamera();
+  if (e.data?.cmd === 'stop') { running = false; stopCamera(); }
+});
+
+init();
+</script>
+</body></html>
