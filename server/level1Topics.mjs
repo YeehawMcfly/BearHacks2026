@@ -5,13 +5,13 @@ export const TOPICS = {
   hydrant: {
     id: 'hydrant',
     label: 'a fire hydrant',
-    pexelsQuery: 'classic red fire hydrant short stout body street curb municipal',
+    pexelsQuery: 'red fire hydrant full view clear photo sharp focus entire hydrant in frame front daylight unobstructed',
     loremTag: 'fire,hydrant'
   },
   donut: {
     id: 'donut',
     label: 'a donut',
-    pexelsQuery: 'round glazed ring doughnut with hole in middle',
+    pexelsQuery: 'classic glazed ring doughnut top view center hole round torus shape bakery',
     loremTag: 'doughnut,glazed'
   },
   traffic_light: {
