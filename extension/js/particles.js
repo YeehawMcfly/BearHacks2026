@@ -37,7 +37,10 @@
         size: Math.random() * 5 + 2,
         color: colors[Math.floor(Math.random() * colors.length)],
         life: 1,
-        decay: Math.random() * 0.02 + 0.01
+        decay: Math.random() * 0.02 + 0.01,
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.2,
+        shape: Math.random() > 0.5 ? 'square' : 'circle'
       });
     }
     
@@ -54,19 +57,40 @@
         p.y += p.vy;
         
         // Gravity
-        p.vy += 0.5;
+        p.vy += type === 'success' ? 0.3 : 0.5;
         
         // Friction
         p.vx *= 0.95;
         p.vy *= 0.95;
         
+        // Sway for confetti
+        if (type === 'success') {
+          p.x += Math.sin(p.life * 10) * 2;
+          p.rotation += p.rotSpeed;
+        }
+        
         p.life -= p.decay;
         
         ctx.globalAlpha = Math.max(0, p.life);
         ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
+        
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        if (type === 'success') {
+          ctx.rotate(p.rotation);
+          if (p.shape === 'square') {
+            ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+          } else {
+            ctx.beginPath();
+            ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
       }
       
       if (alive) {

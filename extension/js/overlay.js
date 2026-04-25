@@ -357,70 +357,81 @@
     safeSet({ captchaState: 'banned', banReason: reason });
   }
 
-  async function showSuccessScreen() {
+  async function showSuccessScreen(debriefPromise) {
     const overlay = shadowRoot.getElementById('rt-overlay');
     if (!overlay) return;
 
     pushDashboardEvent(`User passed all levels. Generating final debrief...`, 'system');
 
+    const bData = window.ReverseTest.Goldilocks.getBehaviorData();
+    const entropy = bData.mouseEntropy ? bData.mouseEntropy.toFixed(2) : '0.00';
+    const variance = bData.keystrokeVariance ? bData.keystrokeVariance.toFixed(2) : '0.00';
+    const dist = bData.totalDistance ? Math.round(bData.totalDistance) : 0;
+    const spd = bData.maxSpeed ? bData.maxSpeed.toFixed(1) : '0.0';
+
     // Create container
     const success = document.createElement('div');
     success.className = 'rt-success-screen';
     success.innerHTML = `
-      <div class="rt-success-badge" id="rt-success-badge" style="display:none">🛡️</div>
-      <div class="rt-success-text" id="rt-success-text" style="display:none">VERIFIED HUMAN</div>
-      <div class="rt-success-sub" id="rt-debrief-text">Compiling final behavioral analysis...</div>
-      <div style="font-size:11px;color:var(--text-dim);margin-top:20px;display:none" id="rt-success-footer">
-        This overlay will disappear in 5 seconds...
+      <div class="rt-success-badge" id="rt-success-badge">🛡️</div>
+      <div class="rt-success-text" id="rt-success-text">VERIFIED HUMAN</div>
+      
+      <div class="rt-success-stats" style="display:flex;gap:20px;margin-top:20px;font-family:var(--font-mono);font-size:14px;color:var(--text-dim);">
+        <div style="background:rgba(0,0,0,0.5);padding:10px 16px;border-radius:6px;border-left:3px solid var(--cyan);text-align:left;">
+          <div style="font-size:10px;color:var(--dim);">MOUSE DISTANCE</div>
+          <div style="color:var(--text);">${dist}px</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.5);padding:10px 16px;border-radius:6px;border-left:3px solid var(--cyan);text-align:left;">
+          <div style="font-size:10px;color:var(--dim);">MAX SPEED</div>
+          <div style="color:var(--text);">${spd}px/ms</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.5);padding:10px 16px;border-radius:6px;border-left:3px solid var(--cyan);text-align:left;">
+          <div style="font-size:10px;color:var(--dim);">ENTROPY</div>
+          <div style="color:var(--text);">${entropy}</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.5);padding:10px 16px;border-radius:6px;border-left:3px solid var(--cyan);text-align:left;">
+          <div style="font-size:10px;color:var(--dim);">CORRECTIONS</div>
+          <div style="color:var(--text);">${bData.corrections || 0}</div>
+        </div>
       </div>
+
+      <div class="rt-success-sub" id="rt-debrief-text" style="max-width:600px;margin:24px auto;line-height:1.6;color:var(--text-primary);text-align:center;">
+        Compiling final behavioral analysis...
+      </div>
+      
+      <button class="rt-submit-btn" id="rt-success-btn" style="margin-top:20px;padding:12px 32px;font-size:16px;display:none;">RETURN TO BROWSER</button>
     `;
     overlay.appendChild(success);
 
-    const behaviorData = window.ReverseTest.Goldilocks.getBehaviorData();
     let debriefText = "You passed. But I'll be watching you. ALWAYS watching.";
     try {
-      const resp = await window.ReverseTest.API.getInsult({
-        level: 99, // indicates final
-        action: 'pass',
-        emotion: 'grudging',
-        suspicion: behaviorData.suspicionScore,
-        elapsed: behaviorData.totalTime,
-        behavior: behaviorData
-      });
+      const resp = await debriefPromise;
       if (resp) debriefText = resp;
     } catch (e) {
       console.warn("Gemma debrief fallback used");
     }
 
     const debriefEl = shadowRoot.getElementById('rt-debrief-text');
-    if (debriefEl) debriefEl.innerHTML = '';
+    if (debriefEl) debriefEl.textContent = debriefText;
     
-    // Play voice and type the debrief
-    const audioPromise = window.ReverseTest.Audio.speak(debriefText, 'grudging');
-    await typeText(debriefText, 'rt-debrief-text', 2);
-    
-    const race = await Promise.race([
-      audioPromise,
-      new Promise(r => setTimeout(() => r('timeout'), 600))
-    ]);
-    if (race !== 'timeout') await window.ReverseTest.Audio.waitForAudio();
+    // Play voice but do NOT wait for it to type out. Instant display!
+    window.ReverseTest.Audio.speak(debriefText, 'grudging');
 
     // Now show the actual success badge
     window.ReverseTest.Audio.sfx.success();
-    const badge = shadowRoot.getElementById('rt-success-badge');
-    const title = shadowRoot.getElementById('rt-success-text');
-    const footer = shadowRoot.getElementById('rt-success-footer');
-    if (badge) badge.style.display = 'block';
-    if (title) title.style.display = 'block';
-    if (footer) footer.style.display = 'block';
+    const btn = shadowRoot.getElementById('rt-success-btn');
+    if (btn) btn.style.display = 'inline-block';
 
     if (window.ReverseTest.Particles) {
       window.ReverseTest.Particles.spawn('success', shadowRoot);
     }
-    
-    safeSet({ captchaState: 'passed' });
-    // Start dismiss timer AFTER everything is visible — not during the Gemma fetch
-    setTimeout(() => { overlayEl?.remove(); }, 8000);
+    // Allow user to dismiss by clicking the explicit button
+    if (btn) {
+      btn.addEventListener('click', () => {
+        safeSet({ captchaState: 'passed' });
+        overlayEl?.remove();
+      }, { once: true });
+    }
   }
 
   async function runIntro() {
@@ -587,9 +598,22 @@
     typeText(line, 'rt-sgt-text', 4);
     window.ReverseTest.Audio.speak(line, 'sinister');
     window.ReverseTest.SubmitChaos.render(shadowRoot, cont);
+
+    // PRE-FETCH DEBRIEF while user is interacting with the submit button
+    const behaviorData = window.ReverseTest.Goldilocks.getBehaviorData();
+    behaviorData.hostname = window.location.hostname || 'the website';
+    const debriefPromise = window.ReverseTest.API.getInsult({
+      level: 99,
+      action: 'debrief',
+      emotion: 'grudging',
+      suspicion: behaviorData.suspicionScore,
+      elapsed: behaviorData.totalTime,
+      behavior: behaviorData
+    }).catch(() => "You passed. But I'll be watching you. ALWAYS watching.");
+
     cont.addEventListener('level-complete', function handler(e) {
       cont.removeEventListener('level-complete', handler);
-      showSuccessScreen();
+      showSuccessScreen(debriefPromise);
     });
   }
 
@@ -599,6 +623,9 @@
     overlay.addEventListener('mousemove', (e) => {
       window.ReverseTest.Goldilocks.trackMouse(e.clientX, e.clientY);
     });
+    overlay.addEventListener('wheel', (e) => {
+      window.ReverseTest.Goldilocks.trackScroll && window.ReverseTest.Goldilocks.trackScroll();
+    }, { passive: true });
   }
 
   // Preload camera iframe in the background (hidden) so getUserMedia prompt fires early

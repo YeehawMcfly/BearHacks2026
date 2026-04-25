@@ -120,6 +120,10 @@ app.post('/api/ai/insult', async (req, res) => {
       case 'ban':
         situation = `The user just got BANNED. Suspicion: ${context.score || context.suspicion}%. ${behaviorStr} Deliver a final devastating line calling out their specific non-human behavior. Be ${emotion}. 1 sentence.`;
         break;
+      case 'debrief':
+        const hostname = context.hostname || 'this website';
+        situation = `The user just completed the entire Reverse Turing Test to access ${hostname}. Suspicion score: ${context.suspicion || 'unknown'}%. ${behaviorStr} Give a final 3-4 sentence detailed analysis of their specific behavior patterns. Roast them for any mistakes, slow times, or robotic movements. Conclude if they are human or an advanced AI, and then aggressively dismiss them to go back to what they were doing on ${hostname}. Be ${emotion}.`;
+        break;
       default:
         situation = `React to the user at level ${context.level}. Suspicion: ${context.suspicion || context.score || 'unknown'}%. ${behaviorStr} Be ${emotion}. 1-2 sentences.`;
     }

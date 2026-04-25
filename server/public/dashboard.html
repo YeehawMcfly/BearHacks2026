@@ -6,81 +6,128 @@
   <title>SGT CAPTCHA - Behavioral Analysis</title>
   <style>
     :root {
-      --bg: #0a0e17;
-      --panel: #111827;
-      --panel-border: rgba(6, 182, 212, 0.3);
+      --bg: #050a11;
+      --panel: rgba(10, 15, 25, 0.7);
+      --panel-border: rgba(6, 182, 212, 0.5);
       --text: #e2e8f0;
       --dim: #64748b;
-      --cyan: #06b6d4;
-      --red: #ff2d2d;
-      --green: #10b981;
-      --amber: #f59e0b;
+      --cyan: #0ff;
+      --red: #ff2a2a;
+      --green: #0f0;
+      --amber: #fa0;
+      --glow-cyan: 0 0 15px rgba(0, 255, 255, 0.5);
+      --glow-red: 0 0 15px rgba(255, 42, 42, 0.5);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: var(--bg); color: var(--text);
+      background: radial-gradient(circle at 50% 50%, #0a1120 0%, #03060a 100%);
+      color: var(--text);
       font-family: 'Courier New', Courier, monospace;
       padding: 20px; height: 100vh; display: flex; flex-direction: column;
       overflow: hidden;
+      position: relative;
     }
+    /* CRT Scanlines */
+    body::after {
+      content: " ";
+      display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+      z-index: 2; background-size: 100% 2px, 3px 100%; pointer-events: none;
+    }
+
     header {
       display: flex; justify-content: space-between; align-items: center;
       padding-bottom: 20px; border-bottom: 1px solid var(--panel-border);
-      margin-bottom: 20px;
+      margin-bottom: 20px; z-index: 10; position: relative;
+      box-shadow: 0 10px 20px -10px rgba(0, 255, 255, 0.1);
     }
-    h1 { color: var(--cyan); text-shadow: 0 0 10px rgba(6,182,212,0.5); letter-spacing: 2px; }
+    h1 { color: var(--cyan); text-shadow: var(--glow-cyan); letter-spacing: 4px; font-weight: 900; }
     .status-badge {
-      background: rgba(16, 185, 129, 0.2); color: var(--green);
-      padding: 6px 12px; border-radius: 4px; border: 1px solid var(--green);
-      font-weight: bold;
+      background: rgba(0, 255, 0, 0.1); color: var(--green);
+      padding: 6px 16px; border-radius: 4px; border: 1px solid var(--green);
+      font-weight: bold; letter-spacing: 2px; box-shadow: 0 0 10px rgba(0,255,0,0.3);
+      animation: pulse 2s infinite;
     }
     .status-badge.offline {
-      background: rgba(255, 45, 45, 0.2); color: var(--red); border-color: var(--red);
+      background: rgba(255, 42, 42, 0.1); color: var(--red); border-color: var(--red);
+      box-shadow: var(--glow-red); animation: none;
     }
     
+    @keyframes pulse {
+      0% { box-shadow: 0 0 5px rgba(0,255,0,0.2); }
+      50% { box-shadow: 0 0 15px rgba(0,255,0,0.5); }
+      100% { box-shadow: 0 0 5px rgba(0,255,0,0.2); }
+    }
+
     .grid {
-      display: grid; grid-template-columns: 1fr 1fr 300px;
-      grid-template-rows: 1fr 1fr; gap: 20px; flex: 1; min-height: 0;
+      display: grid; grid-template-columns: 1fr 1fr 1fr 300px;
+      grid-template-rows: 1fr 1fr; gap: 24px; flex: 1; min-height: 0;
+      z-index: 10; position: relative;
     }
     .panel {
       background: var(--panel); border: 1px solid var(--panel-border);
-      border-radius: 8px; padding: 16px; display: flex; flex-direction: column;
-      position: relative;
+      border-radius: 8px; padding: 20px; display: flex; flex-direction: column;
+      position: relative; backdrop-filter: blur(10px);
+      box-shadow: inset 0 0 20px rgba(0,255,255,0.05), 0 5px 15px rgba(0,0,0,0.5);
     }
-    .panel-title { color: var(--cyan); font-size: 14px; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+    .panel::before {
+      content: ''; position: absolute; top: 0; left: 0; width: 30px; height: 30px;
+      border-top: 2px solid var(--cyan); border-left: 2px solid var(--cyan); border-radius: 8px 0 0 0;
+    }
+    .panel::after {
+      content: ''; position: absolute; bottom: 0; right: 0; width: 30px; height: 30px;
+      border-bottom: 2px solid var(--cyan); border-right: 2px solid var(--cyan); border-radius: 0 0 8px 0;
+    }
+
+    .panel-title { 
+      color: var(--cyan); font-size: 13px; font-weight: bold; margin-bottom: 16px; 
+      border-bottom: 1px solid rgba(0,255,255,0.2); padding-bottom: 8px; letter-spacing: 1px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .panel-title::after { content: '///'; color: var(--dim); letter-spacing: 0; }
     
     /* Gauge */
     .gauge-container { display: flex; align-items: center; justify-content: center; flex: 1; flex-direction: column; }
-    .score-value { font-size: 80px; font-weight: bold; color: var(--green); text-shadow: 0 0 20px currentColor; transition: color 0.5s; }
-    .score-value.warn { color: var(--amber); }
-    .score-value.danger { color: var(--red); }
+    .score-value { font-size: 90px; font-weight: bold; color: var(--green); text-shadow: 0 0 30px var(--green); transition: color 0.5s, text-shadow 0.5s; line-height: 1; }
+    .score-value.warn { color: var(--amber); text-shadow: 0 0 30px var(--amber); }
+    .score-value.danger { color: var(--red); text-shadow: 0 0 30px var(--red); animation: shake 0.5s infinite; }
     
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-2px) rotate(-1deg); }
+      75% { transform: translateX(2px) rotate(1deg); }
+    }
+
     /* Heatmap */
-    .heatmap-container { flex: 1; position: relative; background: #000; border-radius: 4px; overflow: hidden; border: 1px solid #333; }
-    #heatmapCanvas { width: 100%; height: 100%; display: block; }
+    .heatmap-container { flex: 1; position: relative; background: rgba(0,0,0,0.8); border-radius: 4px; overflow: hidden; border: 1px solid rgba(0,255,255,0.2); box-shadow: inset 0 0 20px rgba(0,0,0,1); }
+    #heatmapCanvas { width: 100%; height: 100%; display: block; mix-blend-mode: screen; }
     
     /* Metrics */
-    .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .metric { background: rgba(0,0,0,0.4); padding: 12px; border-radius: 6px; border-left: 3px solid var(--cyan); }
-    .metric-label { font-size: 11px; color: var(--dim); margin-bottom: 4px; }
-    .metric-value { font-size: 24px; font-weight: bold; }
+    .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .metric { background: rgba(0,255,255,0.03); padding: 12px; border-radius: 4px; border-left: 2px solid var(--cyan); transition: background 0.2s; }
+    .metric:hover { background: rgba(0,255,255,0.08); }
+    .metric-label { font-size: 10px; color: var(--cyan); margin-bottom: 6px; letter-spacing: 1px; opacity: 0.8; }
+    .metric-value { font-size: 20px; font-weight: bold; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
     
     /* Timeline */
-    .timeline { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
-    .timeline-event { padding: 8px; border-left: 2px solid var(--dim); background: rgba(255,255,255,0.02); }
-    .timeline-event.level { border-left-color: var(--cyan); color: var(--cyan); }
-    .timeline-event.ban { border-left-color: var(--red); color: var(--red); background: rgba(255,0,0,0.1); }
-    .timeline-event.suspicious { border-left-color: var(--amber); color: var(--amber); }
-    .timeline-time { color: var(--dim); font-size: 10px; margin-right: 8px; }
+    .timeline { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; font-size: 12px; padding-right: 10px; }
+    .timeline::-webkit-scrollbar { width: 4px; }
+    .timeline::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+    .timeline::-webkit-scrollbar-thumb { background: var(--cyan); }
+    .timeline-event { padding: 10px; border-left: 2px solid var(--dim); background: linear-gradient(90deg, rgba(255,255,255,0.05), transparent); position: relative; }
+    .timeline-event.level { border-left-color: var(--cyan); color: var(--cyan); background: linear-gradient(90deg, rgba(0,255,255,0.1), transparent); }
+    .timeline-event.ban { border-left-color: var(--red); color: var(--red); background: linear-gradient(90deg, rgba(255,0,0,0.15), transparent); }
+    .timeline-event.suspicious { border-left-color: var(--amber); color: var(--amber); background: linear-gradient(90deg, rgba(255,170,0,0.1), transparent); }
+    .timeline-time { color: var(--dim); font-size: 10px; margin-right: 10px; opacity: 0.7; }
     
     /* Charts */
     .chart-container { flex: 1; position: relative; display: flex; align-items: flex-end; gap: 2px; padding-top: 20px; }
-    .bar { background: var(--cyan); width: flex-basis; transition: height 0.2s; border-radius: 2px 2px 0 0; min-width: 4px; flex: 1; }
-    .chart-label { position: absolute; top: 0; left: 0; font-size: 10px; color: var(--dim); }
+    .bar { background: var(--cyan); width: flex-basis; transition: height 0.2s; border-radius: 2px 2px 0 0; min-width: 4px; flex: 1; box-shadow: 0 0 10px var(--cyan); opacity: 0.8; }
+    .chart-label { position: absolute; top: 0; left: 0; font-size: 10px; color: var(--cyan); opacity: 0.7; }
     
     .panel.tall { grid-row: span 2; }
     
-    @media (max-width: 900px) {
+    @media (max-width: 1200px) {
       .grid { display: flex; flex-direction: column; }
       body { height: auto; overflow: auto; }
       .panel { min-height: 250px; }
@@ -102,12 +149,21 @@
       <div class="panel-title">LIVE SUSPICION SCORE</div>
       <div class="gauge-container">
         <div id="scoreDisplay" class="score-value">5</div>
-        <div style="color: var(--dim); margin-top: 10px;">THRESHOLD: 85 (BAN)</div>
+        <div style="color: var(--cyan); margin-top: 15px; font-size: 12px; letter-spacing: 1px;">THRESHOLD: <span style="color:var(--red);">85 (BAN)</span></div>
       </div>
     </div>
     
-    <!-- Mouse Heatmap -->
+    <!-- AI VERDICT -->
     <div class="panel">
+      <div class="panel-title">GEMMA BEHAVIORAL ANALYSIS</div>
+      <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; flex:1; text-align:center;">
+        <div id="aiVerdict" style="font-size:32px; font-weight:bold; color:var(--cyan); margin-bottom:12px; letter-spacing:2px; text-shadow:var(--glow-cyan);">GATHERING DATA</div>
+        <div id="aiReason" style="font-size:12px; color:var(--text); opacity:0.8; font-style:italic; line-height:1.5;">Awaiting sufficient biometrics to formulate verdict...</div>
+      </div>
+    </div>
+
+    <!-- Mouse Heatmap -->
+    <div class="panel tall">
       <div class="panel-title">TRAJECTORY ANALYSIS (LIVE)</div>
       <div class="heatmap-container">
         <canvas id="heatmapCanvas"></canvas>
@@ -127,7 +183,7 @@
       <div class="panel-title">BIOMETRIC METRICS</div>
       <div class="metrics-grid">
         <div class="metric">
-          <div class="metric-label">MOUSE ENTROPY</div>
+          <div class="metric-label">ENTROPY</div>
           <div id="entropyDisplay" class="metric-value">0.00</div>
         </div>
         <div class="metric">
@@ -135,12 +191,20 @@
           <div id="varianceDisplay" class="metric-value">0.00</div>
         </div>
         <div class="metric">
-          <div class="metric-label">CORRECTIONS</div>
-          <div id="correctionsDisplay" class="metric-value">0</div>
+          <div class="metric-label">DISTANCE</div>
+          <div id="distanceDisplay" class="metric-value">0px</div>
         </div>
         <div class="metric">
-          <div class="metric-label">LEVELS PASSED</div>
-          <div id="levelsDisplay" class="metric-value">0</div>
+          <div class="metric-label">MAX SPEED</div>
+          <div id="speedDisplay" class="metric-value">0.0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">SCROLLS</div>
+          <div id="scrollsDisplay" class="metric-value">0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">CORRECTIONS</div>
+          <div id="correctionsDisplay" class="metric-value">0</div>
         </div>
       </div>
     </div>
@@ -164,6 +228,9 @@
     const statusEl = document.getElementById('connectionStatus');
     const timelineEl = document.getElementById('timeline');
     const ksChart = document.getElementById('ksChart');
+    const aiVerdictEl = document.getElementById('aiVerdict');
+    const aiReasonEl = document.getElementById('aiReason');
+
     
     // Heatmap setup
     const canvas = document.getElementById('heatmapCanvas');
@@ -242,6 +309,7 @@
     }
     
     // Connect to SSE stream
+    let latestState = null;
     function connectSSE() {
       const evtSource = new EventSource('/api/dashboard/events');
       
@@ -258,6 +326,7 @@
       
       evtSource.addEventListener('state', (e) => {
         const data = JSON.parse(e.data);
+        latestState = data;
         
         // Update metrics
         const s = data.suspicionScore || 0;
@@ -267,7 +336,13 @@
         entropyEl.textContent = (data.mouseEntropy || 0).toFixed(2);
         varianceEl.textContent = (data.keystrokeVariance || 0).toFixed(2);
         correctionsEl.textContent = data.corrections || 0;
-        levelsEl.textContent = data.levelsCompleted || 0;
+        
+        const distEl = document.getElementById('distanceDisplay');
+        const spdEl = document.getElementById('speedDisplay');
+        const scrEl = document.getElementById('scrollsDisplay');
+        if (distEl) distEl.textContent = Math.round(data.totalDistance || 0) + 'px';
+        if (spdEl) spdEl.textContent = (data.maxSpeed || 0).toFixed(1) + 'px/ms';
+        if (scrEl) scrEl.textContent = data.scrollEvents || 0;
         
         updateKsChart(data.ksIntervals);
         
@@ -284,6 +359,29 @@
     }
     
     connectSSE();
+
+    // AI Evaluation Loop
+    async function evaluateAI() {
+      if (!latestState) return;
+      try {
+        const response = await fetch('/api/ai/evaluate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ behaviorData: latestState })
+        });
+        if (response.ok) {
+          const result = await response.json();
+          aiVerdictEl.textContent = result.verdict;
+          aiVerdictEl.style.color = result.verdict === 'HUMAN' ? 'var(--green)' : 
+                                    result.verdict === 'SUSPICIOUS' ? 'var(--amber)' : 
+                                    'var(--red)';
+          aiReasonEl.textContent = result.reason || 'Confidence: ' + (result.confidence ? Math.round(result.confidence * 100) + '%' : '--');
+        }
+      } catch (e) {
+        console.error("Failed to evaluate AI", e);
+      }
+    }
+    setInterval(evaluateAI, 8000); // Poll every 8s
   </script>
 </body>
 </html>

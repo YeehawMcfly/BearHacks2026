@@ -20,7 +20,10 @@
     levelsCompleted: 0,
     lastBroadcast: 0,
     broadcastQueued: false,
-    newMousePts: []
+    newMousePts: [],
+    maxSpeed: 0,
+    totalDistance: 0,
+    scrollEvents: 0
   };
 
   function now() { return performance.now(); }
@@ -130,9 +133,26 @@
     },
 
     trackMouse(x, y) {
-      state.mousePositions.push({ x, y, t: now() });
+      const last = state.mousePositions[state.mousePositions.length - 1];
+      const time = now();
+      if (last) {
+        const dx = x - last.x;
+        const dy = y - last.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        state.totalDistance += dist;
+        const dt = Math.max(1, time - last.t);
+        const speed = dist / dt; // pixels per ms
+        if (speed > state.maxSpeed) state.maxSpeed = speed;
+      }
+
+      state.mousePositions.push({ x, y, t: time });
       state.newMousePts.push({ x, y, click: false });
       if (state.mousePositions.length > 200) state.mousePositions.shift();
+      this.queueBroadcast();
+    },
+
+    trackScroll() {
+      state.scrollEvents++;
       this.queueBroadcast();
     },
 
@@ -182,7 +202,10 @@
         keystrokeVariance: keystrokeVariance(),
         corrections: state.corrections,
         totalTime: (now() - state.totalStartTime) / 1000,
-        levelsCompleted: state.levelsCompleted
+        levelsCompleted: state.levelsCompleted,
+        maxSpeed: state.maxSpeed,
+        totalDistance: state.totalDistance,
+        scrollEvents: state.scrollEvents
       };
     },
 
