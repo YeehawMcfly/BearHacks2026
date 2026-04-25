@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "The Reverse Turing Test",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "An AI Drill Sergeant CAPTCHA that thinks YOU are the bot. Prove you're human — or get banned.",
   "permissions": ["storage", "tabs"],
   "background": {
@@ -18,6 +18,7 @@
         "js/levels/level2-words.js",
         "js/levels/level3-pi.js",
         "js/levels/level4-math.js",
+        "js/levels/level5-gesture.js",
         "js/submit-chaos.js",
         "js/decoy-captcha.js",
         "js/overlay.js",
@@ -45,7 +46,8 @@
         "styles/overlay.css",
         "assets/*",
         "assets/recaptcha-logo/RecaptchaLogo.svg.png",
-        "fonts/*"
+        "fonts/*",
+        "js/mediapipe-bridge.js"
       ],
       "matches": ["<all_urls>"]
     }

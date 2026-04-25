@@ -3,15 +3,28 @@
  * "Recite the first 20 digits of Pi. You have 30 seconds."
  * The Goldilocks Trap: too fast = AI agent ban. Too slow = bot.
  * Sweet spot: 8-20 seconds with at least 1 correction.
+ *
+ * FIX: Accepts partial answers (12+ correct digits prefix) as a pass.
+ *      Timeout also counts as "acceptable human failure" and progresses.
  */
 (function () {
   const PI_DIGITS = '31415926535897932384';
   const TIME_LIMIT = 30;
+  const MIN_DIGITS_TO_PASS = 12; // Accept 12+ correct digits as passing
   let container = null;
   let shadowRoot = null;
   let timerInterval = null;
   let timeRemaining = TIME_LIMIT;
   let startTime = 0;
+
+  function countCorrectPrefix(answer) {
+    let count = 0;
+    for (let i = 0; i < Math.min(answer.length, PI_DIGITS.length); i++) {
+      if (answer[i] === PI_DIGITS[i]) count++;
+      else break; // stop at first wrong digit
+    }
+    return count;
+  }
 
   function render(shadow, cont) {
     shadowRoot = shadow;
@@ -31,7 +44,7 @@
           autocomplete="off" autocorrect="off" spellcheck="false"
           style="font-size:24px; letter-spacing:4px; text-align:center;" />
         <div class="text-center mt-8" style="font-size:11px; color:var(--text-dim);">
-          Enter all 20 digits: 3, 1, 4, 1, 5, ...
+          Enter digits of Pi: 3, 1, 4, 1, 5, ... (${MIN_DIGITS_TO_PASS}+ correct digits to pass)
         </div>
         <div class="text-center mt-16">
           <button class="rt-submit-btn" id="rt-l3-submit">SUBMIT DIGITS</button>
@@ -43,15 +56,13 @@
     const timerEl = shadow.getElementById('rt-timer');
     const piDisplay = shadow.getElementById('rt-pi-hint');
 
-    // Auto-focus
     setTimeout(() => input.focus(), 100);
 
-    // Track keystrokes
     input.addEventListener('keydown', (e) => {
       window.ReverseTest.Goldilocks.trackKeystroke(e.key);
     });
 
-    // Live feedback — show which digits are correct
+    // Live feedback
     input.addEventListener('input', () => {
       const val = input.value;
       let display = 'π = ';
@@ -78,9 +89,19 @@
       }
       if (timeRemaining <= 0) {
         clearInterval(timerInterval);
-        // Time's up — auto-fail
+        // Time's up — this is an acceptable human failure, let them progress
+        const answer = (input?.value || '').trim();
+        const correctCount = countCorrectPrefix(answer);
         container.dispatchEvent(new CustomEvent('level-complete', {
-          detail: { passed: false, speedFactor: 0.01, perfect: false, elapsed: TIME_LIMIT, timedOut: true }
+          detail: {
+            passed: true,  // Timeout = human behaviour, let them through
+            humanFailure: true,
+            speedFactor: 0.05,
+            perfect: false,
+            elapsed: TIME_LIMIT,
+            timedOut: true,
+            correctDigits: correctCount
+          }
         }));
       }
     }, 1000);
@@ -94,23 +115,29 @@
   function validate() {
     const input = shadowRoot?.getElementById('rt-l3-input');
     const answer = (input?.value || '').trim();
-    const correct = answer === PI_DIGITS;
     const elapsed = (performance.now() - startTime) / 1000;
+    const correctCount = countCorrectPrefix(answer);
+    const allCorrect = answer === PI_DIGITS;
 
     // THE GOLDILOCKS TRAP
     let speedFactor;
     if (elapsed < 3) speedFactor = 1.0;       // INSTANT — definitely AI
     else if (elapsed < 5) speedFactor = 0.85;  // Very suspicious
-    else if (elapsed < 8) speedFactor = 0.6;   // Fast but possible
-    else if (elapsed < 20) speedFactor = 0.25;  // Sweet spot — human
-    else speedFactor = 0.15;                    // Slow but okay
+    else if (elapsed < 8) speedFactor = 0.5;   // Fast but possible
+    else if (elapsed < 20) speedFactor = 0.2;  // Sweet spot — human
+    else speedFactor = 0.1;                    // Slow but okay
+
+    // Pass if: all 20 correct, OR 12+ correct prefix digits
+    const passed = allCorrect || correctCount >= MIN_DIGITS_TO_PASS;
 
     return {
-      passed: correct,
+      passed,
+      humanFailure: !allCorrect && passed, // Partial = human-like
       speedFactor,
-      perfect: correct && elapsed < 3, // This triggers a BAN
+      perfect: allCorrect && elapsed < 3,
       elapsed,
-      tooFast: elapsed < 3 && correct,
+      tooFast: elapsed < 3 && allCorrect,
+      correctDigits: correctCount,
       answer
     };
   }

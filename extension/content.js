@@ -9,6 +9,10 @@
   // Prevent double injection
   if (document.getElementById('reverse-turing-test-host')) return;
 
+  // Pre-cache URL synchronously — getURL throws after context invalidation
+  let CSS_URL = '';
+  try { CSS_URL = chrome.runtime.getURL('styles/overlay.css'); } catch (_) { return; }
+
   async function checkAndInject() {
     try {
       const state = await chrome.storage.local.get(['captchaState', 'banReason']);
@@ -28,7 +32,7 @@
         // Show permanent ban screen
         const link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = chrome.runtime.getURL('styles/overlay.css');
+        link.href = CSS_URL;
         shadow.appendChild(link);
 
         await new Promise(r => { link.onload = r; link.onerror = r; });
@@ -63,21 +67,22 @@
   }
 
   // Listen for state changes (e.g., passed from another tab)
-  chrome.storage.onChanged.addListener((changes) => {
-    if (changes.captchaState) {
-      const newState = changes.captchaState.newValue;
-      const host = document.getElementById('reverse-turing-test-host');
-      if (newState === 'passed' && host) {
-        host.style.transition = 'opacity 0.5s';
-        host.style.opacity = '0';
-        setTimeout(() => host.remove(), 500);
+  try {
+    chrome.storage.onChanged.addListener((changes) => {
+      if (changes.captchaState) {
+        const newState = changes.captchaState.newValue;
+        const host = document.getElementById('reverse-turing-test-host');
+        if (newState === 'passed' && host) {
+          host.style.transition = 'opacity 0.5s';
+          host.style.opacity = '0';
+          setTimeout(() => host.remove(), 500);
+        }
+        if (newState === 'not_started') {
+          window.location.reload();
+        }
       }
-      if (newState === 'not_started') {
-        // Reset — reload to re-trigger
-        window.location.reload();
-      }
-    }
-  });
+    });
+  } catch (_) {}
 
   // Go
   if (document.readyState === 'loading') {
