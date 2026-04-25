@@ -1,6 +1,6 @@
 /**
  * Decoy “normal” CAPTCHA — generic checkbox widget shown before SGT. CAPTCHA.
- * Flow: click → spinner → red X → tab overload (stacked duplicate cards) → local glitch → takeover → SGT. overlay latches in.
+ * Flow: click → … → tab overload → black + “Not so fast” type → dwell → apex → SGT. overlay latches in.
  */
 (function () {
   /** Spinning “verifying” phase before the X (reCAPTCHA-like). */
@@ -11,9 +11,9 @@
   const TAB_SPAWN_COUNT_REDUCED = 3;
   /** First N layers (0 … N-1) use the diagonal stack; the rest are random on screen. */
   const TABS_DIAGONAL_COUNT = 5;
-  /** CRT / chromatic “system failure” on the decoy card. */
-  const GLITCH_MS = 1000;
-  const GLITCH_MS_REDUCED = 220;
+  /** Hold on black (with “Not so fast” + glitch layer) after typing; was 1s, +5s for dwell. */
+  const POST_TYPE_BLACK_HOLD_MS = 6000;
+  const POST_TYPE_BLACK_HOLD_MS_REDUCED = 5220;
   /** Full-screen corruption burst, then SGT. overlay “latches in”. */
   const TAKEOVER_MS = 1100;
   const TAKEOVER_MS_REDUCED = 200;
@@ -133,6 +133,9 @@
     const logoUrl = chrome.runtime.getURL('assets/recaptcha-logo/RecaptchaLogo.svg.png');
     return `
       <div class="rt-decoy-root">
+        <div class="rt-decoy-preface" id="rt-decoy-preface" style="display:none" aria-hidden="true">
+          <div class="rt-decoy-preface-text" id="rt-decoy-preface-text"></div>
+        </div>
         <div class="rt-decoy-cascade" id="rt-decoy-cascade">
           ${getStackedLayerHTML(logoUrl, 0, { first: true })}
         </div>
@@ -170,6 +173,37 @@
     }
   }
 
+  const NOT_SO_FAST = 'Not so fast';
+  /** ms per char: ~55–105, slower than overlay typeText. */
+  const NOT_SO_FAST_CHAR_MIN = 55;
+  const NOT_SO_FAST_CHAR_JITTER = 50;
+
+  /**
+   * Typewriter with SGT. bubble colors + .rt-cursor; slower than main overlay typeText.
+   * @param {ShadowRoot} shadow
+   * @param {boolean} reduceMotion
+   */
+  async function typeNotSoFast(shadow, reduceMotion) {
+    const el = shadow.getElementById('rt-decoy-preface-text');
+    const wrap = shadow.getElementById('rt-decoy-preface');
+    if (!el || !wrap) return;
+    wrap.style.display = 'block';
+    wrap.setAttribute('aria-hidden', 'false');
+    el.textContent = '';
+    if (reduceMotion) {
+      el.textContent = NOT_SO_FAST;
+      el.innerHTML = el.textContent + '<span class="rt-cursor"></span>';
+      return;
+    }
+    for (let i = 0; i < NOT_SO_FAST.length; i++) {
+      el.textContent += NOT_SO_FAST[i];
+      await new Promise((r) =>
+        setTimeout(r, NOT_SO_FAST_CHAR_MIN + Math.random() * NOT_SO_FAST_CHAR_JITTER)
+      );
+    }
+    el.innerHTML = el.textContent + '<span class="rt-cursor"></span>';
+  }
+
   /**
    * @param {ShadowRoot} shadow
    * @param {() => void | Promise<void>} onDone
@@ -204,7 +238,8 @@
       const root = shadow.querySelector('.rt-decoy-root');
       if (root) {
         root.classList.add('rt-decoy-root--glitch');
-        await delay(reduceMotion ? GLITCH_MS_REDUCED : GLITCH_MS);
+        await typeNotSoFast(shadow, reduceMotion);
+        await delay(reduceMotion ? POST_TYPE_BLACK_HOLD_MS_REDUCED : POST_TYPE_BLACK_HOLD_MS);
         root.classList.add('rt-decoy-root--glitch-apex');
         await delay(reduceMotion ? TAKEOVER_MS_REDUCED : TAKEOVER_MS);
       }

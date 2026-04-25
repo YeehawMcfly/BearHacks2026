@@ -477,6 +477,37 @@
   isolation: isolate;
 }
 
+/* SGT. intro on black after tab spam — typewriter + .rt-cursor, larger than sgt line */
+.rt-decoy-preface {
+  position: fixed;
+  top: min(22vh, 200px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  pointer-events: none;
+  padding: 16px 28px 18px;
+  max-width: min(92vw, 560px);
+  text-align: center;
+  background: var(--bg-secondary);
+  border: 1px solid rgba(6, 182, 212, 0.15);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 24px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+}
+.rt-decoy-preface-text {
+  min-height: 28px;
+  display: inline-block;
+  text-align: center;
+}
+.rt-decoy-preface .rt-cursor {
+  width: 10px;
+  height: 22px;
+  vertical-align: text-bottom;
+}
+
 /* Tab overload: same reCAPTCHA card look; only offset + z-index for the cascade */
 .rt-decoy-cascade {
   position: fixed;
