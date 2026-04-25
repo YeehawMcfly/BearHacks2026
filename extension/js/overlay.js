@@ -251,7 +251,7 @@
     if (headerNormal) headerNormal.style.display = 'none';
     if (headerMil) headerMil.style.display = 'flex';
     if (threatPanel) threatPanel.style.display = 'flex';
-    if (progressPanel) progressPanel.style.display = 'block';
+    // if (progressPanel) progressPanel.style.display = 'block'; // Hidden for immersion
     if (sgtPanel) sgtPanel.style.display = 'flex';
     if (normalFooter) normalFooter.style.display = 'none';
 
