@@ -33,7 +33,7 @@
   ];
   // Act II (military, escalating)
   const MILITARY_INTROS = [
-    "ALRIGHT LISTEN UP! Recite the first 20 digits of Pi. From MEMORY. You have 30 seconds, MOVE!",
+    "ALRIGHT LISTEN UP! Recite the first 20 digits of Pi. From MEMORY. You have 15 seconds, MOVE!",
     "Time for a BRAIN SCAN! Find checkmate in ONE move. Or admit defeat like a HUMAN!",
     "You think you're SMART?! SOLVE THIS IN 5 SECONDS! I DARE YOU!",
     "I don't believe you're REAL! PROVE YOUR MEAT BODY EXISTS! SHOW ME YOUR HANDS!",
@@ -251,7 +251,7 @@
     if (headerNormal) headerNormal.style.display = 'none';
     if (headerMil) headerMil.style.display = 'flex';
     if (threatPanel) threatPanel.style.display = 'flex';
-    if (progressPanel) progressPanel.style.display = 'block';
+    // if (progressPanel) progressPanel.style.display = 'block'; // Hidden for immersion
     if (sgtPanel) sgtPanel.style.display = 'flex';
     if (normalFooter) normalFooter.style.display = 'none';
 

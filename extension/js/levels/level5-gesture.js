@@ -30,7 +30,7 @@
     currentGesture = GESTURES[Math.floor(Math.random() * GESTURES.length)];
 
     container.innerHTML = `
-      <div class="rt-challenge-title" style="color:var(--accent-magenta)">LEVEL 6 — BIOMETRIC VERIFICATION</div>
+      <div class="rt-challenge-title" style="color:var(--accent-magenta)">BIOMETRIC VERIFICATION</div>
       <div class="rt-challenge-subtitle">
         <span style="font-size:28px">${currentGesture.emoji}</span><br>
         ${currentGesture.instruction}
