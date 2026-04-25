@@ -205,6 +205,14 @@ const MATE_IN_1_PUZZLES = [
   { fen: "7k/R7/7K/8/8/8/8/8 w - - 0 1", fromAlg: "a7", toAlg: "a8", hint: "Basic rook mate." }
 ];
 
+// Convert algebraic notation (e.g. "e1") to board coordinates [row, col]
+// row 0 = rank 8 (top of board), col 0 = a-file
+function uciToCoord(alg) {
+  const col = alg.charCodeAt(0) - 97; // 'a'=0, 'b'=1, ..., 'h'=7
+  const row = 8 - parseInt(alg[1]);   // '8'=0, '1'=7
+  return [row, col];
+}
+
 app.get('/api/chess/puzzle', async (req, res) => {
   try {
     // Select a random curated puzzle

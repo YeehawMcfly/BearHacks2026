@@ -55,6 +55,11 @@ let lastNodDir = 0;
 let shakeOscillations = 0;
 let lastShakeDir = 0;
 
+// Clap tracking
+let clapState = 'apart'; // 'apart' | 'together'
+let clapCycles = 0;
+const CLAP_REQUIRED_CYCLES = 3;
+
 // Cycle tracking for full-body gestures
 let jjArmsWereUp = false;   // jumping jack: arms in up position
 let jjCycles = 0;           // completed jumping jack cycles
@@ -203,7 +208,8 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
   const handLandmarks = gestureResult?.landmarks;
 
   // Check if this gesture type uses the GestureRecognizer
-  const expectedCategories = findExpectedCategories(g);
+  // CLAP contains "HAND" but should NOT use the palm classifier — it has a custom handler below
+  const expectedCategories = g.includes('CLAP') ? null : findExpectedCategories(g);
 
   if (expectedCategories) {
     // This is a hand gesture — use classifier
@@ -225,17 +231,40 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
     return 0; // Gesture not recognized
   }
 
+  // ── CLAP: both wrists come together repeatedly ──
+  if (g.includes('CLAP')) {
+    if (pl) {
+      const lWrist = pl[15], rWrist = pl[16];
+      const wristDist = Math.hypot(lWrist.x - rWrist.x, lWrist.y - rWrist.y);
+      if (clapState === 'apart' && wristDist < 0.08) {
+        clapState = 'together';
+      }
+      if (clapState === 'together' && wristDist > 0.18) {
+        clapCycles++;
+        clapState = 'apart';
+        console.log(`[CLAP] Cycle ${clapCycles}/${CLAP_REQUIRED_CYCLES}`);
+      }
+      return clapCycles >= CLAP_REQUIRED_CYCLES ? 1.0 : 0;
+    }
+    return 0;
+  }
+
   // ── SALUTE: hand near forehead (not in GestureRecognizer) ──
   if (g.includes('SALUTE')) {
     if (handLandmarks?.length > 0 && pl) {
-      const fingertip = handLandmarks[0][12]; // middle finger tip
-      const nose = pl[0];
-      const rEar = pl[8];
-      const shoulder = pl[12];
-      // Fingers must be near temple and above shoulder
-      if (fingertip.y >= shoulder.y) return 0;
-      const distToEar = Math.hypot(fingertip.x - rEar.x, fingertip.y - rEar.y);
-      if (distToEar < 0.13 && fingertip.y < nose.y + 0.04) return 1.0;
+      // Check ALL detected hands, not just the first
+      for (let h = 0; h < handLandmarks.length; h++) {
+        const fingertip = handLandmarks[h][12]; // middle finger tip
+        const nose = pl[0];
+        const rEar = pl[8];
+        const lEar = pl[7];
+        const shoulder = pl[12];
+        if (fingertip.y >= shoulder.y) continue;
+        const distToREar = Math.hypot(fingertip.x - rEar.x, fingertip.y - rEar.y);
+        const distToLEar = Math.hypot(fingertip.x - lEar.x, fingertip.y - lEar.y);
+        const nearEar = Math.min(distToREar, distToLEar);
+        if (nearEar < 0.13 && fingertip.y < nose.y + 0.04) return 1.0;
+      }
     }
     return 0;
   }
@@ -270,23 +299,45 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
     return 0;
   }
 
-  // ── JUMPING JACKS: Arms up ──
-  // A jumping jack = hold arms above head for a sustained period.
+  // ── JUMPING JACKS: Require up-down CYCLES (not static hold) ──
   if (g.includes('JUMPING') || g.includes('JACK')) {
     if (pl) {
       const lWrist = pl[15], rWrist = pl[16];
       const lShoulder = pl[11], rShoulder = pl[12];
-      // Check if BOTH arms are above shoulders (the "up" position)
-      if (lWrist.y < lShoulder.y - 0.05 && rWrist.y < rShoulder.y - 0.05) return 1.0;
+      const armsUp = lWrist.y < lShoulder.y - 0.05 && rWrist.y < rShoulder.y - 0.05;
+      const armsDown = lWrist.y > lShoulder.y + 0.05 && rWrist.y > rShoulder.y + 0.05;
+
+      if (armsUp && !jjArmsWereUp) {
+        jjArmsWereUp = true;
+      }
+      if (armsDown && jjArmsWereUp) {
+        jjCycles++;
+        jjArmsWereUp = false;
+        console.log(`[JJ] Cycle ${jjCycles}/3`);
+      }
+      // Return match during the "up" phase of cycle so progress ring fills while performing
+      return (jjCycles >= 3 || (jjArmsWereUp && jjCycles >= 2)) ? 1.0 : (armsUp ? 1.0 : 0);
     }
     return 0;
   }
 
-  // ── SQUAT: hips drop to knee level ──
+  // ── SQUAT: Require up-down CYCLES (not static hold) ──
   if (g.includes('SQUAT')) {
     if (pl) {
       const hip = pl[24], knee = pl[26];
-      return (hip.y > knee.y - 0.06) ? 1.0 : 0;
+      const isSquatting = hip.y > knee.y - 0.06;
+      const isStanding = hip.y < knee.y - 0.18;
+
+      if (squatPhase === 'standing' && isSquatting) {
+        squatPhase = 'squatting';
+      }
+      if (squatPhase === 'squatting' && isStanding) {
+        squatCycles++;
+        squatPhase = 'standing';
+        console.log(`[SQUAT] Cycle ${squatCycles}/${SQUAT_REQUIRED_CYCLES}`);
+      }
+      // Match during squat phase so progress ring fills while performing
+      return (squatCycles >= SQUAT_REQUIRED_CYCLES) ? 1.0 : (isSquatting ? 1.0 : 0);
     }
     return 0;
   }
@@ -359,29 +410,36 @@ function findExpectedCategories(gesture) {
 }
 
 // Check wave motion: Open_Palm detected + wrist oscillating laterally + hand above shoulder
+// Now checks ALL detected hands (not just index 0) so left hand works too
 function checkWaveMotion(handLandmarks, poseResult) {
   if (!handLandmarks || handLandmarks.length === 0) return false;
-  const wrist = handLandmarks[0][0];
 
-  // Hand must be raised (above shoulder level) — prevents static palm-down detection
   const pl = poseResult?.landmarks?.[0];
-  if (pl) {
-    const shoulderY = Math.min(pl[11].y, pl[12].y);
-    // Wrist must be above or near shoulder height (lower y = higher in frame)
-    if (wrist.y > shoulderY + 0.05) return false; // hand too low, not waving
+  const shoulderY = pl ? Math.min(pl[11].y, pl[12].y) : 0.5;
+
+  // Check each detected hand — pick the one that's raised highest
+  let bestWrist = null;
+  for (let h = 0; h < handLandmarks.length; h++) {
+    const wrist = handLandmarks[h][0];
+    // Hand must be above or near shoulder height (lower y = higher in frame)
+    if (wrist.y <= shoulderY + 0.05) {
+      if (!bestWrist || wrist.y < bestWrist.y) bestWrist = wrist;
+    }
   }
 
+  if (!bestWrist) return false; // no hand raised high enough
+
   if (prevWristX !== null) {
-    const dx = wrist.x - prevWristX;
-    // Increased threshold: 0.015 (up from 0.010) to require more deliberate motion
+    const dx = bestWrist.x - prevWristX;
+    // Require deliberate lateral motion
     const dir = dx > 0.015 ? 1 : dx < -0.015 ? -1 : 0;
     if (dir !== 0 && dir !== lastWaveDir) {
       waveOscillations++;
       lastWaveDir = dir;
     }
   }
-  prevWristX = wrist.x;
-  // Need at least 3 direction changes to confirm actual waving (up from 2)
+  prevWristX = bestWrist.x;
+  // Need at least 3 direction changes to confirm actual waving
   return waveOscillations >= 3;
 }
 

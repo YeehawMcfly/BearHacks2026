@@ -419,7 +419,8 @@
     }
     
     safeSet({ captchaState: 'passed' });
-    setTimeout(() => { overlayEl?.remove(); }, 5000);
+    // Start dismiss timer AFTER everything is visible — not during the Gemma fetch
+    setTimeout(() => { overlayEl?.remove(); }, 8000);
   }
 
   async function runIntro() {
