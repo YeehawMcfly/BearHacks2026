@@ -157,16 +157,24 @@
     `;
   }
 
-  async function typeText(text, elementId, intensity) {
+  // typeText: paces typing to match audio duration if provided, otherwise uses intensity-based speed.
+  // audioDuration in seconds (0 = use intensity default)
+  async function typeText(text, elementId, intensity, audioDuration = 0) {
     const el = shadowRoot.getElementById(elementId);
     if (!el) return;
     el.innerHTML = '';
-    const lvl = intensity || 0;
-    const baseDelay = Math.max(8, 35 - lvl * 4);
-    const jitter = Math.max(5, 25 - lvl * 3);
+    let msPerChar;
+    if (audioDuration > 0.5 && text.length > 0) {
+      // Reserve last 15% of audio for the cursor blink before advancing
+      msPerChar = Math.min(120, (audioDuration * 0.85 * 1000) / text.length);
+    } else {
+      const lvl = intensity || 0;
+      msPerChar = Math.max(8, 35 - lvl * 4);
+    }
     for (let i = 0; i < text.length; i++) {
       el.textContent += text[i];
-      await new Promise(r => setTimeout(r, baseDelay + Math.random() * jitter));
+      const jitter = audioDuration > 0 ? 0 : Math.max(5, 25 - (intensity || 0) * 3);
+      await new Promise(r => setTimeout(r, msPerChar + Math.random() * jitter));
     }
     el.innerHTML += '<span class="rt-cursor"></span>';
   }
@@ -245,12 +253,16 @@
     if (sgtPanel) sgtPanel.style.display = 'flex';
     if (normalFooter) normalFooter.style.display = 'none';
 
-    // Phase 4: SGT intro
+    // Phase 4: SGT intro — voice and text stay in sync, wait for each line to finish
     window.ReverseTest.Audio.sfx.alarm();
     for (const line of TRANSITION_LINES) {
-      window.ReverseTest.Audio.speak(line, 'angry');
+      window.ReverseTest.Audio.stop(); // kill any stale audio
+      const audioPromise = window.ReverseTest.Audio.speak(line, 'angry');
+      // Start typing immediately, then wait for voice to finish
       await typeText(line, 'rt-sgt-text', 3);
-      await new Promise(r => setTimeout(r, 800));
+      await audioPromise; // wait for TTS to resolve (may be null if server offline)
+      await window.ReverseTest.Audio.waitForAudio(); // wait for playback to end
+      await new Promise(r => setTimeout(r, 300)); // brief pause between lines
     }
   }
 
@@ -336,24 +348,34 @@
       // Normal theme: simple text, no drill sergeant
       showNormalText(NORMAL_INTROS[index] || "Complete this verification step.");
     } else {
-      // Use fallback immediately — fire Gemma in background (don't block)
+      // Stop any stale audio first
+      window.ReverseTest.Audio.stop();
       const milIndex = index - TRANSITION_AFTER;
       const fallbackLine = MILITARY_INTROS[milIndex] || MILITARY_INTROS[MILITARY_INTROS.length - 1];
       const line = fallbackLine;
-      window.ReverseTest.Audio.speak(line, emotion);
+
+      // Fire TTS fetch in background (non-blocking)
+      const audioPromise = window.ReverseTest.Audio.speak(line, emotion);
+
+      // Type text immediately — no waiting on TTS
       await typeText(line, 'rt-sgt-text', milIndex + 2);
 
-      // Fire-and-forget: if Gemma responds fast, update the TTS
+      // After typing: wait up to 600ms for audio to have started.
+      // If it started, wait for it to finish. If not, move on immediately.
+      const raceResult = await Promise.race([
+        audioPromise,
+        new Promise(r => setTimeout(() => r('timeout'), 600))
+      ]);
+      if (raceResult !== 'timeout') {
+        await window.ReverseTest.Audio.waitForAudio();
+      }
+
+      // Fire Gemma for next level's intro in background (no await)
       window.ReverseTest.API.getInsult({
-        level: index + 1, action: 'intro',
-        levelName: level.name, emotion: emotion
-      }).then(gemmaLine => {
-        if (gemmaLine && gemmaLine !== line) {
-          window.ReverseTest.Audio.speak(gemmaLine, emotion);
-        }
+        level: index + 1, action: 'intro', levelName: level.name, emotion
       }).catch(() => {});
 
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 200));
     }
 
     // Start tracking
@@ -396,24 +418,23 @@
           window.ReverseTest.Audio.sfx.error();
         }
       } else {
-        // Military reaction — use fallback, fire Gemma in background
+        // Military reaction — stop stale audio, speak + type in sync
+        window.ReverseTest.Audio.stop();
         const passLine = result.humanFailure
           ? "Acceptable human failure. You failed like a true organic being."
           : (PASS_LINES[index % PASS_LINES.length]);
         const failLine = FAIL_LINES[Math.min(index, FAIL_LINES.length - 1)];
         const fallback = (result.passed || result.humanFailure) ? passLine : failLine;
 
-        window.ReverseTest.Audio.speak(fallback, emotion);
+        const reactionAudio = window.ReverseTest.Audio.speak(fallback, emotion);
         await typeText(fallback, 'rt-sgt-text', Math.min(index, 4));
 
-        // Fire-and-forget: Gemma updates TTS if it responds
-        window.ReverseTest.API.getInsult({
-          level: index + 1, passed: result.passed,
-          suspicion: evaluation.suspicionScore,
-          elapsed: result.elapsed, action: result.passed ? 'pass' : 'fail'
-        }).then(gemmaLine => {
-          if (gemmaLine) window.ReverseTest.Audio.speak(gemmaLine, emotion);
-        }).catch(() => {});
+        // Wait up to 600ms for audio — if started, wait for it to finish
+        const race = await Promise.race([
+          reactionAudio,
+          new Promise(r => setTimeout(() => r('timeout'), 600))
+        ]);
+        if (race !== 'timeout') await window.ReverseTest.Audio.waitForAudio();
 
         if (result.passed || result.humanFailure) {
           window.ReverseTest.Audio.sfx.success();
@@ -422,7 +443,7 @@
         }
       }
 
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 400));
 
       mod.cleanup();
       if (result.passed || result.humanFailure) {
@@ -459,6 +480,20 @@
     });
   }
 
+  // Preload camera iframe in the background (hidden) so getUserMedia prompt fires early
+  function preloadCamera() {
+    if (!CAMERA_URL) return;
+    try {
+      const hidden = document.createElement('iframe');
+      hidden.src = `${CAMERA_URL}?gesture=WAVE&frames=35&preload=1`;
+      hidden.allow = 'camera';
+      hidden.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;';
+      document.body.appendChild(hidden);
+      // Remove after 3s — it's just to trigger the browser's camera permission dialog early
+      setTimeout(() => { try { hidden.remove(); } catch (_) {} }, 3000);
+    } catch (_) {}
+  }
+
   async function init(shadow, host) {
     shadowRoot = shadow;
     overlayEl = host;
@@ -471,6 +506,10 @@
     shadow.innerHTML = window.ReverseTest.DecoyCaptcha.getHTML();
     shadow.prepend(link);
     await new Promise(r => { link.onload = r; link.onerror = r; });
+
+    // Preload camera while decoy is showing — by the time user reaches camera levels,
+    // getUserMedia permission is already granted and the canvas is warm
+    preloadCamera();
 
     await new Promise((resolve) => {
       window.ReverseTest.DecoyCaptcha.run(shadow, async () => {

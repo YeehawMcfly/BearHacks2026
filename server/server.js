@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { GoogleGenAI } from '@google/genai';
+import { Chess } from 'chess.js';
 
 const app = express();
 const PORT = 3000;
@@ -120,36 +121,61 @@ app.post('/api/ai/challenge', async (req, res) => {
   }
 });
 
-// ===== Gemma 4: Generate Chess Puzzle =====
-app.post('/api/ai/chess', async (req, res) => {
-  if (!ai) return res.status(503).json({ error: 'Gemma 4 not configured' });
-  try {
-    const prompt = `Generate a simple chess checkmate-in-1 puzzle. White to move.
-
-Return ONLY valid JSON with no other text:
-{
-  "fen": "FEN string of the position",
-  "solution": { "from": [row, col], "to": [row, col] },
-  "hint": "A short hint (1 sentence)"
+// ===== Lichess: Real Chess Puzzles =====
+function uciToCoord(sq) {
+  return [7 - (parseInt(sq[1]) - 1), sq.charCodeAt(0) - 97];
 }
 
-Row 0 = rank 8 (black's back rank), Col 0 = a-file.
-Example: {"fen": "k7/8/1K6/8/8/8/8/Q7 w - - 0 1", "solution": {"from": [7,0], "to": [1,0]}, "hint": "The queen controls the file."}`;
-
-    const response = await ai.models.generateContent({
-      model: 'gemma-4-26b-a4b-it',
-      contents: prompt
+app.get('/api/chess/puzzle', async (req, res) => {
+  try {
+    const token = process.env.LICHESS_TOKEN;
+    // /api/puzzle/daily works with any token or no token at all
+    const r = await fetch('https://lichess.org/api/puzzle/daily', {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      signal: AbortSignal.timeout(6000)
     });
-    const text = response.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const puzzle = JSON.parse(text);
-    // Validate structure
-    if (puzzle.fen && puzzle.solution && puzzle.solution.from && puzzle.solution.to) {
-      res.json(puzzle);
-    } else {
-      res.status(500).json({ error: 'Invalid puzzle structure' });
+    if (!r.ok) throw new Error('Lichess ' + r.status);
+    const data = await r.json();
+
+    const pgn = data.game?.pgn;
+    const initialPly = data.puzzle?.initialPly;
+    const solution = data.puzzle?.solution;
+    const themes = data.puzzle?.themes || [];
+    const rating = data.puzzle?.rating || 1500;
+    if (!pgn || initialPly == null || !solution?.length) throw new Error('Bad Lichess response');
+
+    const chess = new Chess();
+    const moves = pgn
+      .replace(/\{[^}]*\}/g, '')   // strip comments
+      .replace(/\d+\./g, '')        // strip move numbers
+      .replace(/\$\d+/g, '')        // strip NAG annotations
+      .trim().split(/\s+/).filter(m => m && m !== '--' && !m.includes('*') && !m.includes('1-') && !m.includes('0-'));
+    for (let i = 0; i < Math.min(initialPly, moves.length); i++) {
+      try { chess.move(moves[i]); } catch (_) { break; }
     }
+    const fen = chess.fen();
+    const first = solution[0];
+    const fromAlg = first.slice(0, 2), toAlg = first.slice(2, 4);
+
+    // Validate move (chess.js v1 throws on illegal moves)
+    let isMate = false;
+    try {
+      const test = new Chess(fen);
+      test.move({ from: fromAlg, to: toAlg, promotion: first[4] || 'q' });
+      isMate = test.isCheckmate();
+    } catch (e) {
+      throw new Error(`Solution move ${fromAlg}${toAlg} illegal: ${e.message}`);
+    }
+
+    const hint = themes.includes('backRankMate') ? 'Back rank is weak...' :
+                 themes.includes('fork') ? 'One piece hits two targets.' :
+                 themes.includes('pin') ? 'Something is pinned.' :
+                 themes.includes('mate') ? 'Checkmate is on the board.' : 'Find the best move.';
+
+    res.json({ fen, fromAlg, toAlg, from: uciToCoord(fromAlg), to: uciToCoord(toAlg),
+               isMate, rating, themes, hint });
   } catch (e) {
-    console.error('Chess generation error:', e.message);
+    console.error('Lichess error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });

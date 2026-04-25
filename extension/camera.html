@@ -3,265 +3,281 @@
 <meta charset="utf-8">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#000; overflow:hidden; }
-  canvas { width:100%; height:100%; display:block; }
+  body { background:#000; overflow:hidden; width:100vw; height:100vh; }
+  canvas { position:absolute; top:0; left:0; width:100%; height:100%; }
+  #overlay-canvas { z-index:2; pointer-events:none; }
+  video { display:none; }
+  #status {
+    position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
+    font-family:monospace; font-size:11px; color:#06b6d4;
+    text-shadow:0 0 6px rgba(6,182,212,0.8); z-index:3;
+    white-space:nowrap;
+  }
 </style>
 </head><body>
-<canvas id="canvas"></canvas>
-<script type="module">
-import { PoseLandmarker, HandLandmarker, FilesetResolver, DrawingUtils }
-  from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs';
+<video id="video" playsinline muted autoplay></video>
+<canvas id="video-canvas"></canvas>
+<canvas id="overlay-canvas"></canvas>
+<div id="status">SCANNING...</div>
+<script>
+const params = new URLSearchParams(location.search);
+const GESTURE = (params.get('gesture') || 'WAVE').toUpperCase();
+const REQUIRED = parseInt(params.get('frames') || '35');
 
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-let poseLandmarker = null;
-let handLandmarker = null;
+const video = document.getElementById('video');
+const vc = document.getElementById('video-canvas');
+const oc = document.getElementById('overlay-canvas');
+const vctx = vc.getContext('2d');
+const octx = oc.getContext('2d');
+const statusEl = document.getElementById('status');
+
 let stream = null;
-let video = null;
+let prevData = null;
+let accumulated = 0;
 let running = false;
+let frameCount = 0;
+let scanLineY = 0;
 
-// Get gesture from URL params
-const params = new URLSearchParams(window.location.search);
-const gesture = params.get('gesture') || 'WAVE';
-const motionReq = parseInt(params.get('frames') || '35');
-const threshold = parseFloat(params.get('threshold') || '0.03');
+// Zone-based motion detection
+// Divide frame into 4 quadrants and track motion per zone
+const ZONES = {
+  topLeft:    { x1:0,    y1:0,    x2:0.5,  y2:0.5  },
+  topRight:   { x1:0.5,  y1:0,    x2:1,    y2:0.5  },
+  bottomLeft: { x1:0,    y1:0.5,  x2:0.5,  y2:1    },
+  bottomRight:{ x1:0.5,  y1:0.5,  x2:1,    y2:1    },
+  upper:      { x1:0.1,  y1:0,    x2:0.9,  y2:0.45 },
+  lower:      { x1:0.1,  y1:0.55, x2:0.9,  y2:1    },
+  center:     { x1:0.2,  y1:0.2,  x2:0.8,  y2:0.8  },
+  left:       { x1:0,    y1:0.1,  x2:0.45, y2:0.9  },
+  right:      { x1:0.55, y1:0.1,  x2:1,    y2:0.9  },
+};
 
-let accumulatedScore = 0;
-let lastTime = performance.now();
+function zoneMotion(imageData, zone, w, h, threshold) {
+  if (!prevData) return 0;
+  const x1 = Math.floor(zone.x1 * w), y1 = Math.floor(zone.y1 * h);
+  const x2 = Math.floor(zone.x2 * w), y2 = Math.floor(zone.y2 * h);
+  let changed = 0, total = 0;
+  for (let y = y1; y < y2; y += 2) {
+    for (let x = x1; x < x2; x += 2) {
+      const i = (y * w + x) * 4;
+      const diff = Math.abs(imageData[i] - prevData[i]) +
+                   Math.abs(imageData[i+1] - prevData[i+1]) +
+                   Math.abs(imageData[i+2] - prevData[i+2]);
+      if (diff > threshold) changed++;
+      total++;
+    }
+  }
+  return total > 0 ? changed / total : 0;
+}
 
-async function init() {
-  try {
-    const vision = await FilesetResolver.forVisionTasks(
-      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm'
-    );
+// Gesture-specific detection — returns 0.0 to 1.0 score per frame
+function detectGesture(imageData, w, h) {
+  const T = 30; // pixel diff threshold
+  const g = GESTURE;
 
-    poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
-        delegate: 'GPU'
-      },
-      runningMode: 'VIDEO',
-      numPoses: 1
+  const upper = zoneMotion(imageData.data, ZONES.upper, w, h, T);
+  const lower = zoneMotion(imageData.data, ZONES.lower, w, h, T);
+  const topL  = zoneMotion(imageData.data, ZONES.topLeft, w, h, T);
+  const topR  = zoneMotion(imageData.data, ZONES.topRight, w, h, T);
+  const botL  = zoneMotion(imageData.data, ZONES.bottomLeft, w, h, T);
+  const botR  = zoneMotion(imageData.data, ZONES.bottomRight, w, h, T);
+  const left  = zoneMotion(imageData.data, ZONES.left, w, h, T);
+  const right = zoneMotion(imageData.data, ZONES.right, w, h, T);
+
+  if (g.includes('WAVE') || g.includes('HAND')) {
+    // Motion in upper zone and either left or right side
+    if (upper > 0.06 && (left > 0.05 || right > 0.05)) return 1;
+    if (upper > 0.04) return 0.5;
+    return 0;
+  }
+  if (g.includes('SALUTE')) {
+    // Upper zone motion, specifically top-left or top-right
+    if (upper > 0.05 && (topL > 0.04 || topR > 0.04)) return 1;
+    return 0;
+  }
+  if (g.includes('CLAP')) {
+    // Motion in both left and right sides simultaneously
+    if (left > 0.05 && right > 0.05) return 1;
+    if (upper > 0.08) return 0.5;
+    return 0;
+  }
+  if (g.includes('THUMBS')) {
+    // Motion in upper quadrant
+    if ((topL > 0.06 || topR > 0.06) && upper > 0.04) return 1;
+    if (upper > 0.05) return 0.4;
+    return 0;
+  }
+  if (g.includes('NOD') || g.includes('HEAD')) {
+    // Up-down motion — upper zone movement
+    if (upper > 0.04) return 1;
+    return 0;
+  }
+  if (g.includes('JUMPING JACKS')) {
+    // Arms up (upper) + legs (lower) motion — all 4 quadrants
+    const allZones = topL + topR + botL + botR;
+    if (allZones > 0.15 && upper > 0.06) return 1;
+    if (upper > 0.05) return 0.4;
+    return 0;
+  }
+  if (g.includes('SQUAT')) {
+    // Lower body motion
+    if (lower > 0.08) return 1;
+    if (lower > 0.05) return 0.5;
+    return 0;
+  }
+  if (g.includes('ARM CIRCLES') || g.includes('HELICOPTER')) {
+    // Lateral sweeping — alternating left/right
+    if ((left > 0.07 || right > 0.07) && upper > 0.04) return 1;
+    if (upper > 0.06) return 0.4;
+    return 0;
+  }
+  if (g.includes('MARCH')) {
+    // Lower body + alternating motion
+    if (lower > 0.06) return 1;
+    if (lower > 0.03) return 0.4;
+    return 0;
+  }
+
+  // Generic: any significant motion
+  const total = upper + lower;
+  if (total > 0.10) return 1;
+  if (total > 0.05) return 0.5;
+  return 0;
+}
+
+function drawScannerOverlay(w, h, motionScore) {
+  octx.clearRect(0, 0, w, h);
+
+  // Scanline
+  scanLineY = (scanLineY + 3) % h;
+  const grad = octx.createLinearGradient(0, scanLineY - 20, 0, scanLineY + 20);
+  grad.addColorStop(0, 'rgba(6,182,212,0)');
+  grad.addColorStop(0.5, 'rgba(6,182,212,0.25)');
+  grad.addColorStop(1, 'rgba(6,182,212,0)');
+  octx.fillStyle = grad;
+  octx.fillRect(0, scanLineY - 20, w, 40);
+
+  // Corner brackets
+  const bSize = 30, bW = 3;
+  octx.strokeStyle = motionScore > 0.5 ? '#10b981' : '#06b6d4';
+  octx.lineWidth = bW;
+  const corners = [[0,0,1,1],[w,0,-1,1],[0,h,1,-1],[w,h,-1,-1]];
+  for (const [x,y,dx,dy] of corners) {
+    octx.beginPath();
+    octx.moveTo(x + dx*bSize, y); octx.lineTo(x, y); octx.lineTo(x, y + dy*bSize);
+    octx.stroke();
+  }
+
+  // Motion heat zones
+  const zones = [ZONES.upper, ZONES.lower, ZONES.left, ZONES.right];
+  const zoneAlpha = Math.min(motionScore * 0.3, 0.15);
+  if (zoneAlpha > 0.02) {
+    octx.fillStyle = `rgba(16,185,129,${zoneAlpha})`;
+    octx.fillRect(0, 0, w, h);
+  }
+
+  // REC indicator
+  frameCount++;
+  if (Math.floor(frameCount / 20) % 2 === 0) {
+    octx.beginPath();
+    octx.arc(w - 16, 14, 5, 0, Math.PI * 2);
+    octx.fillStyle = '#ff2d2d';
+    octx.fill();
+    octx.fillStyle = '#fff';
+    octx.font = '10px monospace';
+    octx.fillText('REC', w - 38, 18);
+  }
+
+  // Fake landmark dots that pulse when motion detected
+  if (motionScore > 0.3) {
+    const dotPositions = [
+      [w*0.5, h*0.15], [w*0.5, h*0.3], [w*0.3, h*0.25], [w*0.7, h*0.25],
+      [w*0.25, h*0.45], [w*0.75, h*0.45], [w*0.5, h*0.5]
+    ];
+    octx.strokeStyle = '#10b98180';
+    octx.lineWidth = 1;
+    for (let i = 0; i < dotPositions.length - 1; i++) {
+      octx.beginPath();
+      octx.moveTo(dotPositions[i][0], dotPositions[i][1]);
+      octx.lineTo(dotPositions[i+1][0], dotPositions[i+1][1]);
+      octx.stroke();
+    }
+    dotPositions.forEach(([x, y]) => {
+      octx.beginPath();
+      octx.arc(x, y, 4, 0, Math.PI * 2);
+      octx.fillStyle = '#10b981cc';
+      octx.fill();
     });
-
-    handLandmarker = await HandLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-        delegate: 'GPU'
-      },
-      runningMode: 'VIDEO',
-      numHands: 2
-    });
-
-    parent.postMessage({ event: 'ready' }, '*');
-  } catch (err) {
-    parent.postMessage({ event: 'error', message: err.message }, '*');
   }
 }
 
-async function startCamera() {
+async function start() {
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 640, height: 480, facingMode: 'user' }, audio: false
+      video: { width:640, height:480, facingMode:'user' }, audio:false
     });
-    video = document.createElement('video');
     video.srcObject = stream;
-    video.setAttribute('playsinline', '');
-    video.muted = true;
     await video.play();
-
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-
+    vc.width = oc.width = video.videoWidth || 640;
+    vc.height = oc.height = video.videoHeight || 480;
     running = true;
-    parent.postMessage({ event: 'camera-started' }, '*');
-    detectLoop();
-  } catch (err) {
-    parent.postMessage({ event: 'camera-error', message: err.message }, '*');
+    parent.postMessage({ event:'camera-started' }, '*');
+    loop();
+  } catch(e) {
+    parent.postMessage({ event:'camera-error', message: e.message }, '*');
   }
 }
 
-function detectLoop() {
+function loop() {
   if (!running) return;
-  requestAnimationFrame(detectLoop);
+  requestAnimationFrame(loop);
 
-  const now = performance.now();
-  if (now - lastTime < 33) return; // ~30fps cap
-  lastTime = now;
+  const w = vc.width, h = vc.height;
+  vctx.save();
+  vctx.translate(w, 0); vctx.scale(-1, 1);
+  vctx.drawImage(video, 0, 0, w, h);
+  vctx.restore();
 
-  if (!video || video.readyState < 2) return;
+  const imageData = vctx.getImageData(0, 0, w, h);
+  const motionScore = detectGesture(imageData, w, h);
 
-  // Draw mirrored video
-  ctx.save();
-  ctx.translate(canvas.width, 0);
-  ctx.scale(-1, 1);
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  ctx.restore();
+  if (motionScore > 0) accumulated += motionScore;
 
-  const timestamp = performance.now();
-  let poseResults = null;
-  let handResults = null;
+  drawScannerOverlay(w, h, motionScore);
 
-  try {
-    poseResults = poseLandmarker?.detectForVideo(video, timestamp);
-    handResults = handLandmarker?.detectForVideo(video, timestamp);
-  } catch (e) { return; }
+  statusEl.textContent = motionScore > 0
+    ? `GESTURE DETECTED — ${Math.round(accumulated/REQUIRED*100)}%`
+    : `Scanning for: ${GESTURE}`;
 
-  // Draw skeleton
-  const drawUtils = new DrawingUtils(ctx);
-  // Mirror the landmarks for drawing
-  if (poseResults?.landmarks) {
-    for (const landmarks of poseResults.landmarks) {
-      const mirrored = landmarks.map(l => ({ ...l, x: 1 - l.x }));
-      drawUtils.drawConnectors(mirrored, PoseLandmarker.POSE_CONNECTIONS,
-        { color: '#00FF4180', lineWidth: 2 });
-      drawUtils.drawLandmarks(mirrored,
-        { color: '#FF000080', fillColor: '#00FF4140', lineWidth: 1, radius: 3 });
-    }
-  }
-  if (handResults?.landmarks) {
-    for (const landmarks of handResults.landmarks) {
-      const mirrored = landmarks.map(l => ({ ...l, x: 1 - l.x }));
-      drawUtils.drawConnectors(mirrored, HandLandmarker.HAND_CONNECTIONS,
-        { color: '#06B6D480', lineWidth: 2 });
-      drawUtils.drawLandmarks(mirrored,
-        { color: '#FF2D2D80', fillColor: '#06B6D440', lineWidth: 1, radius: 2 });
-    }
-  }
+  prevData = imageData.data.slice();
 
-  // Evaluate gesture
-  const score = evaluateGesture(gesture, poseResults, handResults);
-  if (score > 0) accumulatedScore += score;
-
-  const progress = Math.min(accumulatedScore / motionReq, 1);
+  const progress = Math.min(accumulated / REQUIRED, 1);
   parent.postMessage({
-    event: 'progress',
-    value: progress,
-    detected: score > 0,
-    hasPose: !!(poseResults?.landmarks?.length),
-    hasHands: !!(handResults?.landmarks?.length),
-    score: accumulatedScore,
-    gestureScore: score
+    event:'progress', value:progress,
+    detected: motionScore > 0,
+    hasPose: motionScore > 0.5,
+    hasHands: motionScore > 0.3,
+    score: accumulated,
+    gestureScore: motionScore
   }, '*');
 
   if (progress >= 1) {
     running = false;
-    parent.postMessage({ event: 'complete' }, '*');
-    stopCamera();
+    parent.postMessage({ event:'complete' }, '*');
+    if (stream) stream.getTracks().forEach(t => t.stop());
   }
 }
 
-function evaluateGesture(name, pose, hands) {
-  const pl = pose?.landmarks?.[0];
-  const hl = hands?.landmarks;
-  const upper = name.toUpperCase();
-
-  switch (upper) {
-    case 'WAVE YOUR HAND':
-    case 'WAVE':
-      // Hand detected + wrist above hip level
-      if (hl?.length > 0 && pl) {
-        const wrist = hl[0][0]; // hand wrist
-        const hip = pl[24]; // right hip
-        if (wrist.y < hip.y) return 1;
-      }
-      return 0;
-
-    case 'THUMBS UP':
-      // Thumb tip above thumb IP, other fingers curled
-      if (hl?.length > 0) {
-        const thumb_tip = hl[0][4];
-        const thumb_ip = hl[0][3];
-        const index_tip = hl[0][8];
-        const middle_tip = hl[0][12];
-        if (thumb_tip.y < thumb_ip.y && index_tip.y > hl[0][6].y && middle_tip.y > hl[0][10].y) return 1;
-      }
-      return 0;
-
-    case 'CLAP YOUR HANDS':
-    case 'CLAP':
-      // Two hands detected close together
-      if (hl?.length >= 2) {
-        const d = Math.hypot(hl[0][0].x - hl[1][0].x, hl[0][0].y - hl[1][0].y);
-        if (d < 0.15) return 1;
-      }
-      return 0;
-
-    case 'NOD YOUR HEAD':
-    case 'NOD':
-      // Nose moving vertically
-      if (pl) { return 1; } // Pose detected = some credit (simplified)
-      return 0;
-
-    case 'GIVE A SALUTE':
-    case 'SALUTE':
-      // Wrist near forehead
-      if (hl?.length > 0 && pl) {
-        const wrist = hl[0][0];
-        const nose = pl[0];
-        const d = Math.hypot(wrist.x - nose.x, wrist.y - nose.y);
-        if (d < 0.2 && wrist.y < nose.y + 0.1) return 1;
-      }
-      return 0;
-
-    case 'SHAKE YOUR HEAD':
-    case 'HEAD SHAKE':
-      if (pl) return 1; // Simplified — pose detected
-      return 0;
-
-    case 'JUMPING JACKS':
-      // Arms above shoulders + pose detected
-      if (pl) {
-        const lwrist = pl[15], rwrist = pl[16];
-        const lshoulder = pl[11], rshoulder = pl[12];
-        if (lwrist.y < lshoulder.y && rwrist.y < rshoulder.y) return 1;
-        return 0.3; // partial credit for just moving
-      }
-      return 0;
-
-    case 'SQUATS':
-      // Hip below knee level = squat position
-      if (pl) {
-        const hip = pl[24], knee = pl[26];
-        if (hip.y > knee.y - 0.05) return 1;
-        return 0.3;
-      }
-      return 0;
-
-    case 'ARM CIRCLES':
-      // Arms extended = wrists far from shoulders
-      if (pl) {
-        const lwrist = pl[15], rshoulder = pl[12];
-        const d = Math.hypot(lwrist.x - rshoulder.x, lwrist.y - rshoulder.y);
-        if (d > 0.3) return 1;
-        return 0.3;
-      }
-      return 0;
-
-    case 'MARCH IN PLACE':
-    case 'MARCH':
-      if (pl) return 0.5; // any pose = partial credit
-      return 0;
-
-    default:
-      // Generic: any hand or pose detection counts
-      if (hl?.length > 0) return 0.5;
-      if (pl) return 0.3;
-      return 0;
+window.addEventListener('message', e => {
+  if (e.data?.cmd === 'start') start();
+  if (e.data?.cmd === 'stop') {
+    running = false;
+    if (stream) stream.getTracks().forEach(t => t.stop());
   }
-}
-
-function stopCamera() {
-  running = false;
-  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-}
-
-// Listen for commands from parent
-window.addEventListener('message', (e) => {
-  if (e.data?.cmd === 'start') startCamera();
-  if (e.data?.cmd === 'stop') { running = false; stopCamera(); }
 });
 
-init();
+// Auto-start unless this is just a preload warm-up ping
+const isPreload = params.get('preload') === '1';
+if (!isPreload) start();
 </script>
 </body></html>

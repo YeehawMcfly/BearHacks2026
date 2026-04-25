@@ -76,13 +76,12 @@
     },
 
     async getChessPuzzle() {
-      const r = await post('/api/ai/chess', {});
-      if (r) {
-        try {
-          return await r.json();
-        } catch { return null; }
-      }
-      return null;
+      const alive = await checkServer();
+      if (!alive) return null;
+      try {
+        const r = await fetch(`${SERVER}/api/chess/puzzle`, { signal: AbortSignal.timeout(6000) });
+        return r.ok ? r.json() : null;
+      } catch { return null; }
     },
 
     async getTTS(text, emotion) {
