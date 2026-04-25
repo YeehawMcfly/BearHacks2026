@@ -4,6 +4,8 @@ import cors from 'cors';
 import { GoogleGenAI } from '@google/genai';
 import { Chess } from 'chess.js';
 import os from 'os';
+import { TOPIC_IDS } from './level1Topics.mjs';
+import { buildLevel1Remote } from './level1Remote.mjs';
 
 const app = express();
 const PORT = 3000;
@@ -89,6 +91,7 @@ function getPrompt(emotion) {
 app.get('/health', (_, res) => res.json({
   status: 'ok',
   gemma: !!ai,
+  pexels: !!(process.env.PEXELS_API_KEY && process.env.PEXELS_API_KEY !== 'your_pexels_key_here'),
   elevenlabs: !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_API_KEY !== 'your_elevenlabs_key_here')
 }));
 
@@ -154,13 +157,72 @@ app.post('/api/ai/evaluate', async (req, res) => {
   }
 });
 
-// ===== Gemma 4: Generate Challenge Content =====
+// ===== Level 1: Gemma may pick mission; Pexels +/or LoremFlickr build 9-tile challenge (1–5 positives) =====
+app.post('/api/ai/level1-captcha', async (req, res) => {
+  try {
+    const missionIds = TOPIC_IDS;
+    let missionId = null;
+    let line1 = 'Select all images that contain';
+    let gemmaPicked = false;
+    if (ai) {
+      try {
+        const idList = missionIds.map((id) => JSON.stringify(id)).join(', ');
+        const prompt = `${getPrompt('calm')}
+
+You are scheduling the next image verification challenge. The allowed mission ids are exactly: ${idList}
+Respond with JSON only, no markdown fences, no other text: { "missionId": "<id>", "line1": "<optional short instruction line, or omit>" }
+missionId MUST be one of the allowed ids exactly. The default first line of the task is: Select all images that contain
+If you omit line1, the client will use that default. If you set line1, keep it under 80 characters.`;
+        const response = await ai.models.generateContent({
+          model: 'gemma-4-26b-a4b-it',
+          contents: prompt
+        });
+        let text = response.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed = JSON.parse(text);
+        if (typeof parsed.missionId === 'string' && missionIds.includes(parsed.missionId)) {
+          missionId = parsed.missionId;
+          gemmaPicked = true;
+        }
+        if (typeof parsed.line1 === 'string' && parsed.line1.length > 0 && parsed.line1.length < 120) {
+          line1 = parsed.line1.trim();
+        }
+      } catch (e) {
+        console.warn('Gemma level1-captcha pick failed, using random mission:', e.message);
+      }
+    }
+    if (!missionId) {
+      missionId = missionIds[Math.floor(Math.random() * missionIds.length)];
+    }
+    const pexelsKey = process.env.PEXELS_API_KEY && process.env.PEXELS_API_KEY !== 'your_pexels_key_here'
+      ? process.env.PEXELS_API_KEY
+      : undefined;
+    const built = await buildLevel1Remote(missionId, pexelsKey);
+    if (!built) {
+      return res.status(500).json({ error: 'Could not build level 1 challenge' });
+    }
+    res.json({
+      line1,
+      label: built.label,
+      missionId: built.missionId,
+      imageUrls: built.imageUrls,
+      correctIndices: built.correctIndices,
+      gemma: gemmaPicked
+    });
+  } catch (e) {
+    console.error('level1-captcha error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ===== Gemma 4: Generate Challenge Content (Level 1 uses /api/ai/level1-captcha) =====
 app.post('/api/ai/challenge', async (req, res) => {
   if (!ai) return res.status(503).json({ error: 'Gemma 4 not configured' });
   try {
     const { level } = req.body;
+    if (Number(level) === 1) {
+      return res.status(410).json({ error: 'Level 1 uses POST /api/ai/level1-captcha' });
+    }
     const prompts = {
-      1: 'Generate ONE absurd but funny CAPTCHA image-selection category. Examples: "existential dread", "suspicious activities", "images a bot would pick". Respond with ONLY the category name, nothing else. 2-4 words max.',
       2: 'Generate ONE single military jargon word (6-12 characters, all caps) for a text verification CAPTCHA. Respond with ONLY the word.',
       3: 'Generate a taunting one-liner for someone trying to type Pi from memory. Be a drill sergeant. 1 sentence only.',
       4: 'Generate a chess-related taunt about needing to find checkmate. Be a drill sergeant. 1 sentence only.',
@@ -169,7 +231,7 @@ app.post('/api/ai/challenge', async (req, res) => {
     };
     const response = await ai.models.generateContent({
       model: 'gemma-4-26b-a4b-it',
-      contents: `${getPrompt('angry')}\n\n${prompts[level] || prompts[1]}`
+      contents: `${getPrompt('angry')}\n\n${prompts[level] || prompts[2]}`
     });
     res.json({ text: response.text.replace(/^"|"$/g, '').trim() });
   } catch (e) {

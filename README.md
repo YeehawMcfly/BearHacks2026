@@ -17,7 +17,7 @@ You know those CAPTCHAs that check if you're a robot? This one checks if you're 
 
 | Level | Challenge | The Twist |
 |-------|-----------|-----------|
-| **1** | Select images containing "EXISTENTIAL DREAD" | Categories are intentionally absurd |
+| **1** | Select all images of a target object (e.g. fire hydrant, donut, traffic light) | 1–5 tiles are “correct”; images from Pexels and/or LoremFlickr (server) |
 | **2** | Retype a distorted military word | Typing too fast = suspicious |
 | **3** | Type 20 digits of Pi from memory | Do it in <3 seconds? BANNED. |
 | **4** | Solve impossible math in 5 seconds | Getting it RIGHT = instant ban |
@@ -65,9 +65,10 @@ Leave this running; it serves `http://localhost:3000` for the extension to call.
 | Service | Key | Free? | URL |
 |---------|-----|-------|-----|
 | Google AI Studio | `GEMINI_API_KEY` | ✅ Yes | [aistudio.google.com](https://aistudio.google.com) |
+| Pexels | `PEXELS_API_KEY` | ✅ Yes | [pexels.com/api](https://www.pexels.com/api/) (optional: Level 1 image search; without it, the server uses LoremFlickr tags) |
 | ElevenLabs | `ELEVENLABS_API_KEY` | ✅ Free tier | [elevenlabs.io](https://elevenlabs.io) |
 
-> **Without API keys**, the extension uses pre-baked insults and no voice. Still fully functional!
+> **Without API keys**, the extension uses pre-baked insults and no voice. **Level 1** still works using LoremFlickr when Pexels is not configured. Still fully functional!
 
 ### 4. Demo Mode
 

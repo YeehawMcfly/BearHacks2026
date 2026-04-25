@@ -529,6 +529,14 @@
         return;
       }
 
+      // Level 1 (image captcha): one pass then go straight to Level 2 — no "Verified" interstitial or delay
+      if (isNormal && index === 0 && (result.passed || result.humanFailure)) {
+        window.ReverseTest.Audio.sfx.success();
+        mod.cleanup();
+        startLevel(1);
+        return;
+      }
+
       // ── REACTION ──
       if (isNormal) {
         // Calm reaction in normal theme

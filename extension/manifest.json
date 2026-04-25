@@ -5,8 +5,9 @@
   "description": "An AI Drill Sergeant CAPTCHA that thinks YOU are the bot. Prove you're human — or get banned.",
   "permissions": ["storage", "tabs"],
   "host_permissions": [
-    "https://picsum.photos/*",
-    "https://i.picsum.photos/*"
+    "https://images.pexels.com/*",
+    "https://loremflickr.com/*",
+    "https://*.staticflickr.com/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"

@@ -1,67 +1,93 @@
 /**
- * Level 1 — Image Grid CAPTCHA (Google-style)
- * Uses real photos from picsum.photos for authentic look.
- * Category is absurd (selected by Gemma when available).
- * In Act I (normal theme), this looks like a real reCAPTCHA.
+ * Level 1 — Image grid CAPTCHA (reCAPTCHA-style)
+ * Primary: POST /api/ai/level1-captcha (Pexels + LoremFlickr on server).
+ * Fallback: LoremFlickr-only when server unreachable (topic list mirrors server/level1Topics.mjs).
  */
 (function () {
-  const CATEGORIES = [
-    'existential dread',
-    'suspicious activity',
-    'images a bot would pick',
-    'mild inconvenience',
-    'pure chaos',
-    'vaguely threatening energy',
-    'Tuesday vibes',
-    'things that spark joy',
-    'potential evidence',
-    'something not quite right'
-  ];
-
-  // Fixed set of picsum IDs that are clear, recognizable photos
-  const IMAGE_IDS = [
-    10, 20, 25, 28, 29, 30, 36, 37, 39, 42, 43, 46, 48, 49, 50,
-    54, 55, 57, 58, 59, 64, 65, 67, 70, 74, 76, 80, 82, 84, 89,
-    91, 96, 100, 103, 106, 110, 111, 112, 116, 119, 120, 122, 127, 129, 130
+  const OFFLINE_TOPICS = {
+    hydrant: { label: 'a fire hydrant', loremTag: 'fire,hydrant' },
+    donut: { label: 'a donut', loremTag: 'donut' },
+    traffic: { label: 'a traffic light', loremTag: 'traffic,light' }
+  };
+  const OFFLINE_NEG_TAGS = [
+    'mountain,nature', 'beach,ocean', 'forest,tree', 'laptop,computer', 'pizza,food', 'cat,animal', 'flower,rose'
   ];
 
   let selectedCells = new Set();
   let correctCells = new Set();
+  let line1Text = 'Select all images that contain';
   let categoryLabel = '';
   let container = null;
-  let shadowRoot = null;
 
-  function render(shadow, cont) {
-    shadowRoot = shadow;
-    container = cont;
-    selectedCells.clear();
+  function loremFlickrUrl(tagComma, lock) {
+    return `https://loremflickr.com/200/200/${tagComma}?lock=${lock}`;
+  }
 
-    // Pick category — try Gemma first
-    categoryLabel = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-    window.ReverseTest.API.generateChallenge(1).then(data => {
-      if (data && data.text) {
-        const titleEl = shadow.getElementById('rt-l1-category');
-        if (titleEl) titleEl.textContent = data.text.replace(/"/g, '');
-      }
-    }).catch(() => {});
-
-    // 3-4 cells are "correct"
-    correctCells.clear();
-    const correctCount = 3 + Math.floor(Math.random() * 2);
-    while (correctCells.size < correctCount) {
-      correctCells.add(Math.floor(Math.random() * 9));
+  function shuffleInPlace(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = a[i];
+      a[i] = a[j];
+      a[j] = t;
     }
+    return a;
+  }
 
-    // Pick 9 random image IDs
-    const shuffled = [...IMAGE_IDS].sort(() => Math.random() - 0.5);
-    const nineIds = shuffled.slice(0, 9);
+  /** Same 1–5 positives + shuffle as server/level1Remote.mjs when API is unavailable. */
+  function buildOfflineChallenge(missionId) {
+    const ids = Object.keys(OFFLINE_TOPICS);
+    const mid = (missionId && OFFLINE_TOPICS[missionId] ? missionId : ids[Math.floor(Math.random() * ids.length)]);
+    const topic = OFFLINE_TOPICS[mid];
+    if (!topic) return null;
+    const kPos = 1 + Math.floor(Math.random() * 5);
+    const nNeg = 9 - kPos;
+    const lock0 = (Date.now() % 200000) + Math.floor(Math.random() * 1000);
+    const posUrls = [];
+    for (let p = 0; p < kPos; p++) {
+      posUrls.push(loremFlickrUrl(topic.loremTag, lock0 + p * 17));
+    }
+    const negUrls = [];
+    for (let q = 0; q < nNeg; q++) {
+      const tag = OFFLINE_NEG_TAGS[(q + mid.length) % OFFLINE_NEG_TAGS.length];
+      negUrls.push(loremFlickrUrl(tag, lock0 + 500 + q * 19));
+    }
+    const tiles = [
+      ...posUrls.map((url) => ({ url, isPositive: true })),
+      ...negUrls.map((url) => ({ url, isPositive: false }))
+    ];
+    shuffleInPlace(tiles);
+    const imageUrls = tiles.map((t) => t.url);
+    const correctIndices = [];
+    for (let i = 0; i < tiles.length; i++) {
+      if (tiles[i].isPositive) correctIndices.push(i);
+    }
+    return {
+      missionId: mid,
+      label: topic.label,
+      line1: 'Select all images that contain',
+      imageUrls,
+      correctIndices
+    };
+  }
 
-    container.innerHTML = `
+  function buildHtml(count) {
+    const cells = Array.from({ length: count }, (_, i) => i)
+      .map(
+        (i) => `
+            <div class="rt-l1-cell" data-index="${i}">
+              <div class="rt-l1-shimmer" id="rt-l1-shimmer-${i}"></div>
+              <img id="rt-l1-img-${i}" alt="captcha image" style="opacity:0;transition:opacity 0.3s;" />
+              <div class="rt-l1-check">✓</div>
+            </div>
+          `
+      )
+      .join('');
+    return `
       <div class="rt-l1-normal-wrap">
         <div class="rt-l1-header">
           <div class="rt-l1-header-text">
-            Select all squares with<br>
-            <strong id="rt-l1-category">${categoryLabel}</strong>
+            <span id="rt-l1-line1"></span><br>
+            <strong id="rt-l1-category"></strong>
           </div>
           <div class="rt-l1-header-icon">
             <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#fff" stroke-width="2">
@@ -71,53 +97,27 @@
           </div>
         </div>
         <div class="rt-l1-grid" id="rt-l1-grid">
-          ${nineIds.map((imgId, i) => `
-            <div class="rt-l1-cell" data-index="${i}">
-              <div class="rt-l1-shimmer" id="rt-l1-shimmer-${i}"></div>
-              <img id="rt-l1-img-${i}" alt="captcha image" style="opacity:0;transition:opacity 0.3s;" />
-              <div class="rt-l1-check">✓</div>
-            </div>
-          `).join('')}
+          ${cells}
         </div>
         <div class="rt-l1-footer">
           <button class="rt-l1-verify-btn" id="rt-l1-submit">VERIFY</button>
         </div>
       </div>
     `;
+  }
 
-    // Fetch images via background script to bypass host page CSP
-    nineIds.forEach((imgId, i) => {
-      chrome.runtime.sendMessage({ 
-        type: 'FETCH_IMAGE', 
-        url: `https://picsum.photos/id/${imgId}/200/200` 
-      }, (res) => {
-        const img = shadow.getElementById(`rt-l1-img-${i}`);
-        const shimmer = shadow.getElementById(`rt-l1-shimmer-${i}`);
-        if (res && res.dataUrl && img) {
-          img.src = res.dataUrl;
-          img.onload = () => {
-            img.style.opacity = '1';
-            if (shimmer) shimmer.style.display = 'none';
-          };
-        } else {
-          // Fallback: show a colored placeholder with number
-          if (shimmer) {
-            shimmer.style.background = `hsl(${imgId * 37 % 360}, 60%, 30%)`;
-            shimmer.style.display = 'flex';
-            shimmer.style.alignItems = 'center';
-            shimmer.style.justifyContent = 'center';
-            shimmer.style.fontSize = '32px';
-            shimmer.textContent = ['🌊','🌿','🏔','🌸','🦁','🏙','🌅','🌊','🦋'][i % 9];
-          }
-        }
-      });
-    });
+  function wireLine1Label(shadow, line1, label) {
+    const l1 = shadow.getElementById('rt-l1-line1');
+    const cat = shadow.getElementById('rt-l1-category');
+    if (l1) l1.textContent = line1;
+    if (cat) cat.textContent = label;
+  }
 
-    // Cell click handlers
+  function bindCells(shadow) {
     const cells = shadow.querySelectorAll('.rt-l1-cell');
-    cells.forEach(cell => {
+    cells.forEach((cell) => {
       cell.addEventListener('click', () => {
-        const idx = parseInt(cell.dataset.index);
+        const idx = parseInt(cell.dataset.index, 10);
         if (selectedCells.has(idx)) {
           selectedCells.delete(idx);
           cell.classList.remove('selected');
@@ -132,29 +132,94 @@
         );
       });
     });
+  }
 
-    shadow.getElementById('rt-l1-submit').addEventListener('click', () => {
-      if (selectedCells.size === 0) return;
-      container.dispatchEvent(new CustomEvent('level-complete', { detail: validate() }));
+  function loadRemoteImages(shadow, urls) {
+    urls.forEach((url, i) => {
+      const img = shadow.getElementById(`rt-l1-img-${i}`);
+      const shimmer = shadow.getElementById(`rt-l1-shimmer-${i}`);
+      if (!img) return;
+      try {
+        chrome.runtime.sendMessage({ type: 'FETCH_IMAGE', url }, (res) => {
+          if (res && res.dataUrl) {
+            img.src = res.dataUrl;
+            img.onload = () => {
+              img.style.opacity = '1';
+              if (shimmer) shimmer.style.display = 'none';
+            };
+          } else if (shimmer) {
+            shimmer.style.display = 'flex';
+            shimmer.style.alignItems = 'center';
+            shimmer.style.justifyContent = 'center';
+            shimmer.textContent = '?';
+          }
+        });
+      } catch (e) {
+        if (shimmer) shimmer.textContent = '?';
+      }
     });
+  }
+
+  function render(shadow, cont) {
+    container = cont;
+    selectedCells.clear();
+    correctCells.clear();
+    line1Text = 'Select all images that contain';
+    categoryLabel = '';
+
+    cont.innerHTML = `
+      <div class="rt-l1-normal-wrap">
+        <div class="rt-l1-header-text" style="padding:24px;font-size:14px">Loading…</div>
+      </div>
+    `;
+
+    (async () => {
+      let data = await window.ReverseTest.API.getLevel1Captcha();
+      if (!data || !data.imageUrls || data.imageUrls.length !== 9) {
+        data = buildOfflineChallenge(null);
+      }
+      if (!data || !data.imageUrls || data.imageUrls.length !== 9) {
+        cont.innerHTML = '<div class="rt-l1-normal-wrap"><p>Could not load challenge.</p></div>';
+        return;
+      }
+
+      line1Text = data.line1 || line1Text;
+      categoryLabel = data.label || '';
+      correctCells = new Set(data.correctIndices || []);
+      cont.innerHTML = buildHtml(9);
+      wireLine1Label(shadow, line1Text, categoryLabel);
+      loadRemoteImages(shadow, data.imageUrls);
+      bindCells(shadow);
+
+      const submit = shadow.getElementById('rt-l1-submit');
+      if (submit) {
+        submit.addEventListener('click', () => {
+          if (selectedCells.size === 0) return;
+          container.dispatchEvent(new CustomEvent('level-complete', { detail: validate() }));
+        });
+      }
+    })();
   }
 
   function validate() {
     const elapsed = (performance.now() - window.ReverseTest.Goldilocks._levelStart) / 1000;
     const speed = elapsed < 1.5 ? 1.0 : elapsed < 3 ? 0.7 : elapsed < 8 ? 0.3 : elapsed < 20 ? 0.1 : 0.05;
-    const perfectMatch = selectedCells.size === correctCells.size &&
-      [...selectedCells].every(c => correctCells.has(c));
-
+    const sameSize = selectedCells.size === correctCells.size;
+    const everyMatch = sameSize && [...selectedCells].every((c) => correctCells.has(c));
     return {
-      passed: selectedCells.size >= 2 && selectedCells.size <= 6,
+      passed: everyMatch,
       speedFactor: speed,
-      perfect: perfectMatch && elapsed < 2,
+      perfect: everyMatch && elapsed < 2,
       selected: [...selectedCells],
       elapsed
     };
   }
 
-  function cleanup() { selectedCells.clear(); container = null; }
+  function cleanup() {
+    selectedCells.clear();
+    correctCells.clear();
+    container = null;
+  }
 
   window.ReverseTest = window.ReverseTest || {};
   window.ReverseTest.Level1 = { render, validate, cleanup };
