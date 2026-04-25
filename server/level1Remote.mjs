@@ -1,13 +1,14 @@
 import { getTopic } from './level1Topics.mjs';
 
+/** Distractors deliberately unrelated in subject + scene so the odd tiles are obvious. */
 const NEGATIVE_QUERIES = [
-  'mountain landscape',
-  'ocean beach',
-  'forest path',
-  'laptop computer',
-  'pizza food',
-  'cat pet',
-  'basketball court'
+  'jellyfish deep ocean blue',
+  'polar bear snow arctic',
+  'volcano lava eruption',
+  'galaxy nebula space stars',
+  'desert sand dunes empty',
+  'submarine ocean underwater',
+  'iceberg antarctic'
 ];
 
 function shuffleInPlace(a) {
@@ -24,17 +25,17 @@ function shuffleInPlace(a) {
  * LoremFlickr: comma-separated tags in path, lock gives stable-but-distinct image per id.
  */
 function loremFlickrUrl(tagComma, lock) {
-  return `https://loremflickr.com/200/200/${tagComma}?lock=${lock}`;
+  return `https://loremflickr.com/280/280/${tagComma}?lock=${lock}`;
 }
 
 const NEG_Lorem_TAGS = [
-  'mountain,nature',
-  'beach,ocean',
-  'forest,tree',
-  'laptop,computer',
-  'pizza,food',
-  'cat,animal',
-  'flower,rose'
+  'shark,underwater',
+  'penguin,ice',
+  'volcano,lava',
+  'galaxy,space',
+  'desert,landscape',
+  'eagle,mountain',
+  'medusa,ocean'
 ];
 
 /**
@@ -45,14 +46,14 @@ const NEG_Lorem_TAGS = [
  */
 async function pexelsSearchUrls(query, want, key) {
   if (!key || want <= 0) return [];
-  const u = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=40&size=small`;
+  const u = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=40&size=large`;
   const r = await fetch(u, { headers: { Authorization: key } });
   if (!r.ok) return [];
   const j = await r.json();
   const out = [];
   const seen = new Set();
   for (const p of j.photos || []) {
-    const src = p.src?.small || p.src?.medium || p.src?.tiny;
+    const src = p.src?.large2x || p.src?.large || p.src?.medium || p.src?.small || p.src?.tiny;
     if (src && !seen.has(src)) {
       seen.add(src);
       out.push(src);
@@ -71,7 +72,8 @@ export async function buildLevel1Remote(missionId, pexelsKey) {
   const topic = getTopic(missionId);
   if (!topic) return null;
 
-  const kPos = 1 + Math.floor(Math.random() * 5);
+  // 7 or 8 matching tiles, only 1–2 decoys: majority is the answer
+  const kPos = 7 + Math.floor(Math.random() * 2);
   const nNeg = 9 - kPos;
 
   let posUrls = [];

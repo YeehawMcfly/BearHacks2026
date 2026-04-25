@@ -127,7 +127,7 @@
 /* ========== LEVEL 1: GOOGLE-STYLE IMAGE GRID ========== */
 .rt-l1-normal-wrap {
   border-radius: 4px; overflow: hidden;
-  max-width: 320px; margin: 0 auto;
+  max-width: 420px; margin: 0 auto;
 }
 .rt-l1-header {
   background: #4285f4; color: #fff;

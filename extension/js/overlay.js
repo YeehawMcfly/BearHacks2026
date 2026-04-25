@@ -28,7 +28,7 @@
   // ── TEXT ESCALATION ──
   // Act I (normal, calm)
   const NORMAL_INTROS = [
-    "Please select all images containing the requested category.",
+    "Select every square that shows the object named below (almost all of them will match).",
     "Type the word shown below to verify you're human."
   ];
   // Act II (military, escalating)
@@ -529,7 +529,7 @@
         return;
       }
 
-      // Level 1 (image captcha): one pass then go straight to Level 2 — no "Verified" interstitial or delay
+      // Level 1 (image captcha): one pass then Level 2 — no "Verified" interstitial or delay
       if (isNormal && index === 0 && (result.passed || result.humanFailure)) {
         window.ReverseTest.Audio.sfx.success();
         mod.cleanup();

@@ -6,11 +6,11 @@
 (function () {
   const OFFLINE_TOPICS = {
     hydrant: { label: 'a fire hydrant', loremTag: 'fire,hydrant' },
-    donut: { label: 'a donut', loremTag: 'donut' },
+    donut: { label: 'a donut', loremTag: 'donut,dessert' },
     traffic: { label: 'a traffic light', loremTag: 'traffic,light' }
   };
   const OFFLINE_NEG_TAGS = [
-    'mountain,nature', 'beach,ocean', 'forest,tree', 'laptop,computer', 'pizza,food', 'cat,animal', 'flower,rose'
+    'shark,underwater', 'penguin,ice', 'volcano,lava', 'galaxy,space', 'desert,landscape', 'eagle,mountain', 'medusa,ocean'
   ];
 
   let selectedCells = new Set();
@@ -20,7 +20,7 @@
   let container = null;
 
   function loremFlickrUrl(tagComma, lock) {
-    return `https://loremflickr.com/200/200/${tagComma}?lock=${lock}`;
+    return `https://loremflickr.com/280/280/${tagComma}?lock=${lock}`;
   }
 
   function shuffleInPlace(a) {
@@ -39,7 +39,7 @@
     const mid = (missionId && OFFLINE_TOPICS[missionId] ? missionId : ids[Math.floor(Math.random() * ids.length)]);
     const topic = OFFLINE_TOPICS[mid];
     if (!topic) return null;
-    const kPos = 1 + Math.floor(Math.random() * 5);
+    const kPos = 7 + Math.floor(Math.random() * 2);
     const nNeg = 9 - kPos;
     const lock0 = (Date.now() % 200000) + Math.floor(Math.random() * 1000);
     const posUrls = [];

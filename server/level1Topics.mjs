@@ -5,19 +5,19 @@ export const TOPICS = {
   hydrant: {
     id: 'hydrant',
     label: 'a fire hydrant',
-    pexelsQuery: 'fire hydrant',
+    pexelsQuery: 'red yellow fire hydrant on sidewalk',
     loremTag: 'fire,hydrant'
   },
   donut: {
     id: 'donut',
     label: 'a donut',
-    pexelsQuery: 'donut pastry',
-    loremTag: 'donut'
+    pexelsQuery: 'round frosted sprinkles donuts bakery',
+    loremTag: 'donut,dessert'
   },
   traffic: {
     id: 'traffic',
     label: 'a traffic light',
-    pexelsQuery: 'traffic light',
+    pexelsQuery: 'vertical traffic light red green yellow day',
     loremTag: 'traffic,light'
   }
 };
