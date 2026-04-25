@@ -6,7 +6,7 @@
  */
 (function () {
   const PI_DIGITS = '31415926535897932384';
-  const TIME_LIMIT = 30;
+  const TIME_LIMIT = 15;
   let container = null;
   let shadowRoot = null;
   let timerInterval = null;
