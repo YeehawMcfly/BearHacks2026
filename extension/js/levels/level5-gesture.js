@@ -7,7 +7,6 @@
   const GESTURES = [
     { name: 'WAVE YOUR HAND', instruction: 'WAVE at the camera!', emoji: '👋', hint: 'Raise your hand and wave side to side' },
     { name: 'THUMBS UP', instruction: 'Give me a THUMBS UP!', emoji: '👍', hint: 'Hold a clear thumbs up to the camera' },
-    { name: 'CLAP YOUR HANDS', instruction: 'CLAP YOUR HANDS!', emoji: '👏', hint: 'Bring both hands together repeatedly' },
     { name: 'NOD YOUR HEAD', instruction: 'NOD YOUR HEAD!', emoji: '🫡', hint: 'Move your head up and down' },
     { name: 'GIVE A SALUTE', instruction: 'SALUTE!', emoji: '🫡', hint: 'Raise your hand to your forehead' },
     { name: 'SHAKE YOUR HEAD', instruction: 'SHAKE YOUR HEAD!', emoji: '🙅', hint: 'Turn your head left and right' }
