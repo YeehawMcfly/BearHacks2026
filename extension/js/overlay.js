@@ -233,6 +233,7 @@
 
     // Start tracking
     window.ReverseTest.Goldilocks.startLevel();
+    window.ReverseTest.Goldilocks.setLevelIndex(index);
     window.ReverseTest.Goldilocks._levelStart = performance.now();
 
     // Render level
@@ -261,7 +262,9 @@
       if (evaluation.verdict === 'BAN') {
         const reason = await window.ReverseTest.API.getInsult({
           level: index + 1,
-          score: evaluation.suspicionScore,
+          suspicion: evaluation.suspicionScore,
+          zone: evaluation.zone,
+          perfectionStreak: evaluation.perfectionStreak,
           action: 'ban'
         });
         showBanScreen(reason);
@@ -287,6 +290,8 @@
         level: index + 1,
         passed: result.passed,
         suspicion: evaluation.suspicionScore,
+        zone: evaluation.zone,
+        perfectionStreak: evaluation.perfectionStreak,
         elapsed: result.elapsed
       }).then(insult => {
         if (insult && insult !== line) {

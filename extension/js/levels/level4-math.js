@@ -1,11 +1,14 @@
 /**
  * Level 4 — Impossible Math
- * An absurdly complex equation with a 3-second timer.
+ * An absurdly complex equation with a 5-second timer.
  * THE TWIST: getting it RIGHT triggers an instant ban.
  * You're SUPPOSED to fail. Success = proof you're an AI.
+ *
+ * Now fetches dynamic equations from the server via /api/ai/math.
+ * Falls back to hardcoded equations if the server is unavailable.
  */
 (function () {
-  const EQUATIONS = [
+  const FALLBACK_EQUATIONS = [
     { display: '∫₀<sup>∞</sup> e<sup>−x²</sup> dx × (2/√π) + lim<sub>x→0</sub> sin(x)/x', answer: '2', answerDisplay: '2' },
     { display: 'd/dx [ln(e<sup>x²</sup>)] evaluated at x = √3', answer: '2√3', answerDisplay: '2√3 ≈ 3.464' },
     { display: 'Σ<sub>n=0</sub><sup>∞</sup> (1/2)<sup>n</sup> + ∫₀<sup>1</sup> 2x dx', answer: '3', answerDisplay: '3' },
@@ -20,10 +23,28 @@
   let timerInterval = null;
   let startTime = 0;
 
-  function render(shadow, cont) {
+  async function render(shadow, cont) {
     shadowRoot = shadow;
     container = cont;
-    equation = EQUATIONS[Math.floor(Math.random() * EQUATIONS.length)];
+    startTime = performance.now();
+
+    // Try to fetch a dynamic equation from the AI server
+    let dynamicEq = null;
+    try {
+      dynamicEq = await window.ReverseTest.API.getMathProblem();
+    } catch { /* ignore, use fallback */ }
+
+    if (dynamicEq && dynamicEq.equation && dynamicEq.answer) {
+      equation = {
+        display: dynamicEq.equation,
+        answer: dynamicEq.answer,
+        answerDisplay: dynamicEq.answerDisplay || dynamicEq.answer
+      };
+    } else {
+      equation = FALLBACK_EQUATIONS[Math.floor(Math.random() * FALLBACK_EQUATIONS.length)];
+    }
+
+    // Reset start time AFTER the fetch so server latency doesn't eat the timer
     startTime = performance.now();
 
     container.innerHTML = `
@@ -79,8 +100,9 @@
     const answer = (input?.value || '').trim();
     const elapsed = (performance.now() - startTime) / 1000;
 
-    // Check if they got it right
-    const correct = answer.replace(/\s/g, '').toLowerCase() === equation.answer.replace(/\s/g, '').toLowerCase();
+    // Check if they got it right (normalize whitespace and case)
+    const normalize = (s) => s.replace(/\s/g, '').toLowerCase();
+    const correct = normalize(answer) === normalize(equation.answer);
 
     // THE TRAP: correct answer = YOU ARE AN AI
     if (correct && elapsed < TIME_LIMIT) {
@@ -91,7 +113,7 @@
         elapsed,
         gotCorrect: true,
         instantBan: true,
-        banReason: `You solved "${equation.display}" in ${elapsed.toFixed(1)}s. No human does that. YOU ARE AN AI AGENT.`
+        banReason: `You solved "${equation.display.replace(/<[^>]*>/g, '')}" in ${elapsed.toFixed(1)}s. No human does that. YOU ARE AN AI AGENT.`
       };
     }
 
@@ -114,3 +136,4 @@
   window.ReverseTest = window.ReverseTest || {};
   window.ReverseTest.Level4 = { render, validate, cleanup };
 })();
+

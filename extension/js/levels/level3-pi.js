@@ -78,9 +78,9 @@
       }
       if (timeRemaining <= 0) {
         clearInterval(timerInterval);
-        // Time's up — auto-fail
+        // Time's up — that's the EXPECTED human outcome (nobody knows 20 digits of Pi)
         container.dispatchEvent(new CustomEvent('level-complete', {
-          detail: { passed: false, speedFactor: 0.01, perfect: false, elapsed: TIME_LIMIT, timedOut: true }
+          detail: { passed: true, speedFactor: 0.1, perfect: false, elapsed: TIME_LIMIT, timedOut: true, humanFailure: true }
         }));
       }
     }, 1000);
@@ -105,12 +105,36 @@
     else if (elapsed < 20) speedFactor = 0.25;  // Sweet spot — human
     else speedFactor = 0.15;                    // Slow but okay
 
+    // Got it right AND fast = AI ban
+    if (correct && elapsed < 3) {
+      return {
+        passed: false,
+        speedFactor: 1.0,
+        perfect: true,
+        elapsed,
+        tooFast: true,
+        answer
+      };
+    }
+
+    // Got it right but took a reasonable time = suspicious but pass
+    if (correct) {
+      return {
+        passed: true,
+        speedFactor,
+        perfect: false,
+        elapsed,
+        answer
+      };
+    }
+
+    // Got it WRONG = acceptable human failure, move on
     return {
-      passed: correct,
-      speedFactor,
-      perfect: correct && elapsed < 3, // This triggers a BAN
+      passed: true,
+      speedFactor: 0.15,
+      perfect: false,
       elapsed,
-      tooFast: elapsed < 3 && correct,
+      humanFailure: true,
       answer
     };
   }

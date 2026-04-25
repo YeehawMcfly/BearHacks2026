@@ -71,6 +71,12 @@
       return null; // Levels use their own defaults
     },
 
+    async getMathProblem() {
+      const r = await post('/api/ai/math', {});
+      if (r) return (await r.json());
+      return null; // Level 4 uses its own hardcoded fallbacks
+    },
+
     async getTTS(text, emotion) {
       const r = await post('/api/tts', { text, emotion });
       if (r) {
