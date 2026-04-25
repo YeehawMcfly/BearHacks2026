@@ -72,8 +72,8 @@ export async function buildLevel1Remote(missionId, pexelsKey) {
   const topic = getTopic(missionId);
   if (!topic) return null;
 
-  // 2–4 topic-correct tiles per round
-  const kPos = 2 + Math.floor(Math.random() * 3);
+  // 2 topic-correct tiles per round
+  const kPos = 2;
   const nNeg = 9 - kPos;
 
   let posUrls = [];

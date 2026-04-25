@@ -31,7 +31,7 @@
 
   /** Fire hydrant only; same ratio as server/level1Remote.mjs when API is unavailable. */
   function buildOfflineChallenge() {
-    const kPos = 2 + Math.floor(Math.random() * 3);
+    const kPos = 2;
     const nNeg = 9 - kPos;
     const lock0 = (Date.now() % 200000) + Math.floor(Math.random() * 1000);
     const posUrls = [];
