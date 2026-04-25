@@ -45,7 +45,7 @@
 
   function buildOverlayHTML() {
     return `
-      <div class="rt-overlay rt-intro-anim" id="rt-overlay">
+      <div class="rt-overlay" id="rt-overlay" style="background-color:#0a0e17;">
         <!-- Header -->
         <div class="rt-header">
           <div>
