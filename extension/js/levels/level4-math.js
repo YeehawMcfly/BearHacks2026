@@ -28,10 +28,14 @@
     container = cont;
     startTime = performance.now();
 
-    // Try to fetch a dynamic equation from the AI server
+    // Try to fetch a dynamic equation from the AI server (3s timeout max)
     let dynamicEq = null;
     try {
-      dynamicEq = await window.ReverseTest.API.getMathProblem();
+      const fetchPromise = window.ReverseTest.API.getMathProblem();
+      dynamicEq = await Promise.race([
+        fetchPromise,
+        new Promise(r => setTimeout(() => r(null), 3000))
+      ]);
     } catch { /* ignore, use fallback */ }
 
     if (dynamicEq && dynamicEq.equation && dynamicEq.answer) {
