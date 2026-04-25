@@ -222,10 +222,15 @@ Return ONLY valid JSON, no other text:
   }
 });
 
-// ===== ElevenLabs TTS =====
+// ===== ElevenLabs TTS (with rate limiting + cache) =====
+const ttsCache = new Map(); // text -> { buffer, timestamp }
+const TTS_CACHE_TTL = 120_000; // 2 minutes
+let lastTtsTime = 0;
+const TTS_MIN_GAP = 1500; // minimum 1.5s between requests
+let ttsInFlight = null; // dedup concurrent requests
+
 app.post('/api/tts', async (req, res) => {
   const apiKey = process.env.ELEVENLABS_API_KEY;
-  // Use Adam voice as default (deep, authoritative)
   let voiceId = process.env.ELEVENLABS_VOICE_ID;
   if (!voiceId || voiceId === 'your_voice_id_here') {
     voiceId = 'pNInz6obpgDQGcFmaJgB'; // Adam — deep authoritative male
@@ -236,8 +241,23 @@ app.post('/api/tts', async (req, res) => {
 
   try {
     const { text, emotion } = req.body;
+    if (!text || text.length < 2) return res.status(400).json({ error: 'No text' });
 
-    // Escalating voice settings per emotion
+    // Check cache first
+    const cacheKey = `${text}:${emotion}`;
+    const cached = ttsCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < TTS_CACHE_TTL) {
+      res.set('Content-Type', 'audio/mpeg');
+      res.set('X-TTS-Cache', 'HIT');
+      return res.send(cached.buffer);
+    }
+
+    // Rate limit: wait until min gap has passed
+    const now = Date.now();
+    const wait = Math.max(0, TTS_MIN_GAP - (now - lastTtsTime));
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    lastTtsTime = Date.now();
+
     const voiceSettings = {
       calm:       { stability: 0.7, similarity_boost: 0.8, style: 0.2, use_speaker_boost: true },
       measured:   { stability: 0.6, similarity_boost: 0.8, style: 0.35, use_speaker_boost: true },
@@ -247,24 +267,23 @@ app.post('/api/tts', async (req, res) => {
       sinister:   { stability: 0.5, similarity_boost: 0.85, style: 0.6, use_speaker_boost: true },
       grudging:   { stability: 0.6, similarity_boost: 0.75, style: 0.3, use_speaker_boost: true }
     };
-
     const settings = voiceSettings[emotion] || voiceSettings.angry;
 
-    // Voice settings already handle emotion — no text cues needed
-    const processedText = text;
+    const ADAM_VOICE = 'pNInz6obpgDQGcFmaJgB';
+    const requestBody = JSON.stringify({ text, model_id: 'eleven_turbo_v2_5', voice_settings: settings });
+    const headers = { 'xi-api-key': apiKey, 'Content-Type': 'application/json' };
 
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': apiKey,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        text: processedText,
-        model_id: 'eleven_turbo_v2_5',
-        voice_settings: settings
-      })
+    let response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST', headers, body: requestBody
     });
+
+    // If the configured voice fails (402 = paid tier, 401 = unauthorized), fall back to Adam
+    if (!response.ok && [401, 402, 403].includes(response.status) && voiceId !== ADAM_VOICE) {
+      console.warn(`Voice ${voiceId} returned ${response.status}, falling back to Adam`);
+      response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ADAM_VOICE}`, {
+        method: 'POST', headers, body: requestBody
+      });
+    }
 
     if (!response.ok) {
       const err = await response.text();
@@ -272,9 +291,15 @@ app.post('/api/tts', async (req, res) => {
       return res.status(response.status).json({ error: err });
     }
 
-    const buffer = await response.arrayBuffer();
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    // Cache the result
+    ttsCache.set(cacheKey, { buffer, timestamp: Date.now() });
+    // Evict old entries
+    for (const [k, v] of ttsCache) if (Date.now() - v.timestamp > TTS_CACHE_TTL) ttsCache.delete(k);
+
     res.set('Content-Type', 'audio/mpeg');
-    res.send(Buffer.from(buffer));
+    res.send(buffer);
   } catch (e) {
     console.error('TTS error:', e.message);
     res.status(500).json({ error: e.message });
