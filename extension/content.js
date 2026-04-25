@@ -6,6 +6,9 @@
   // Don't run on extension pages or chrome:// URLs
   if (window.location.protocol === 'chrome-extension:' || window.location.protocol === 'chrome:') return;
 
+  // Don't run on the dashboard (localhost:3000) so we don't block our own metrics
+  if (window.location.hostname === 'localhost' && window.location.port === '3000') return;
+
   // Prevent double injection
   if (document.getElementById('reverse-turing-test-host')) return;
 

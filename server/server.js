@@ -11,6 +11,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public')); // Serve dashboard.html
 
+// Convenience route for dashboard without .html
+app.get('/dashboard', (req, res) => {
+  res.sendFile('dashboard.html', { root: 'public' });
+});
+
 // ===== Dashboard SSE Hub =====
 const dashboardClients = new Set();
 let latestBehaviorData = null;

@@ -4,6 +4,10 @@
   "version": "2.0.0",
   "description": "An AI Drill Sergeant CAPTCHA that thinks YOU are the bot. Prove you're human — or get banned.",
   "permissions": ["storage", "tabs"],
+  "host_permissions": [
+    "https://picsum.photos/*",
+    "https://i.picsum.photos/*"
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
   },
@@ -13,6 +17,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
+      "exclude_matches": ["http://localhost:3000/*", "http://127.0.0.1:3000/*"],
       "js": [
         "js/api.js",
         "js/audio.js",

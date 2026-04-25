@@ -73,9 +73,8 @@
         <div class="rt-l1-grid" id="rt-l1-grid">
           ${nineIds.map((imgId, i) => `
             <div class="rt-l1-cell" data-index="${i}">
-              <img src="https://picsum.photos/id/${imgId}/200/200" alt="captcha image"
-                   loading="eager" crossorigin="anonymous"
-                   onerror="this.src='https://picsum.photos/200/200?random=${i}'"/>
+              <div class="rt-l1-shimmer" id="rt-l1-shimmer-${i}"></div>
+              <img id="rt-l1-img-${i}" alt="captcha image" style="opacity:0;transition:opacity 0.3s;" />
               <div class="rt-l1-check">✓</div>
             </div>
           `).join('')}
@@ -85,6 +84,34 @@
         </div>
       </div>
     `;
+
+    // Fetch images via background script to bypass host page CSP
+    nineIds.forEach((imgId, i) => {
+      chrome.runtime.sendMessage({ 
+        type: 'FETCH_IMAGE', 
+        url: `https://picsum.photos/id/${imgId}/200/200` 
+      }, (res) => {
+        const img = shadow.getElementById(`rt-l1-img-${i}`);
+        const shimmer = shadow.getElementById(`rt-l1-shimmer-${i}`);
+        if (res && res.dataUrl && img) {
+          img.src = res.dataUrl;
+          img.onload = () => {
+            img.style.opacity = '1';
+            if (shimmer) shimmer.style.display = 'none';
+          };
+        } else {
+          // Fallback: show a colored placeholder with number
+          if (shimmer) {
+            shimmer.style.background = `hsl(${imgId * 37 % 360}, 60%, 30%)`;
+            shimmer.style.display = 'flex';
+            shimmer.style.alignItems = 'center';
+            shimmer.style.justifyContent = 'center';
+            shimmer.style.fontSize = '32px';
+            shimmer.textContent = ['🌊','🌿','🏔','🌸','🦁','🏙','🌅','🌊','🦋'][i % 9];
+          }
+        }
+      });
+    });
 
     // Cell click handlers
     const cells = shadow.querySelectorAll('.rt-l1-cell');

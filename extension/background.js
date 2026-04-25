@@ -67,4 +67,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.local.get(null).then(state => sendResponse(state));
     return true;
   }
+
+  // Bypass host page CSP for level1 images
+  if (message.type === 'FETCH_IMAGE') {
+    fetch(message.url)
+      .then(res => res.arrayBuffer())
+      .then(buffer => {
+        // Convert to base64
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        sendResponse({ dataUrl: 'data:image/jpeg;base64,' + btoa(binary) });
+      })
+      .catch(err => {
+        console.error('FETCH_IMAGE error:', err);
+        sendResponse({ error: err.toString() });
+      });
+    return true;
+  }
 });
