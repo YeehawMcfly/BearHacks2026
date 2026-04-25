@@ -10,7 +10,7 @@
   const TAB_SPAWN_COUNT = 19;
   const TAB_SPAWN_COUNT_REDUCED = 3;
   /** First N layers (0 … N-1) use the diagonal stack; the rest are random on screen. */
-  const TABS_DIAGONAL_COUNT = 10;
+  const TABS_DIAGONAL_COUNT = 5;
   /** CRT / chromatic “system failure” on the decoy card. */
   const GLITCH_MS = 1000;
   const GLITCH_MS_REDUCED = 220;
