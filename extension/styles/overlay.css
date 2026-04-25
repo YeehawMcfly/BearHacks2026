@@ -47,6 +47,36 @@
   pointer-events: none; z-index: 101;
 }
 
+/* Enters right after the decoy’s full-screen “takeover” — raster builds, then locks */
+.rt-overlay.rt-overlay--latch-in {
+  animation: ovlSignalLock 0.9s cubic-bezier(0.22, 0.9, 0.18, 1) forwards;
+}
+.rt-overlay--latch-in .rt-challenge-card.rt-slide-up {
+  animation: slideUp 0.55s ease-out 0.55s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rt-overlay.rt-overlay--latch-in {
+    animation: ovlSignalLockReduced 0.02s ease forwards;
+  }
+  .rt-overlay--latch-in .rt-challenge-card.rt-slide-up {
+    animation: slideUp 0.2s ease-out 0.04s both;
+  }
+}
+@keyframes ovlSignalLock {
+  0% {
+    filter: brightness(0) contrast(1.55) blur(0.5px) saturate(1.35);
+    clip-path: inset(49% 0 48% 0);
+  }
+  10% { clip-path: inset(38% 0 36% 0); }
+  22% { clip-path: inset(18% 0 16% 0); filter: brightness(0.12) contrast(1.85) blur(0.4px); }
+  38% { clip-path: inset(0 0 4% 0); filter: brightness(0.35) contrast(1.4) blur(0.2px); }
+  55% { clip-path: inset(0 0 0 0); filter: brightness(0.72) contrast(1.18) blur(0.05px); }
+  100% { filter: brightness(1) contrast(1) blur(0) saturate(1); clip-path: inset(0 0 0 0); }
+}
+@keyframes ovlSignalLockReduced {
+  to { filter: none; clip-path: inset(0 0 0 0); }
+}
+
 /* ========== HEADER ========== */
 .rt-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -446,7 +476,7 @@
   overflow: hidden;
   isolation: isolate;
 }
-/* Failure → handoff: VHS/CRT-style corruption (full-bleed, then SGT. overlay). */
+/* Failure → handoff: VHS/CRT-style corruption; apex phase stacks full-screen below. */
 .rt-decoy-root--glitch {
   background: #000;
   transition: background 0.12s ease;
@@ -485,6 +515,19 @@
     );
   mix-blend-mode: screen;
   animation: decoyBlockTear 0.45s steps(1) infinite;
+}
+/* Higher specificity: apex phase speeds up the base damage layer over the recaptcha clone */
+.rt-decoy-root--glitch.rt-decoy-root--glitch-apex::before {
+  animation: decoyScanlineDrift 0.4s linear infinite, decoyApexFlicker 0.2s steps(2) infinite;
+  opacity: 1;
+}
+.rt-decoy-root--glitch.rt-decoy-root--glitch-apex::after {
+  animation: decoyBlockTear 0.22s steps(1) infinite, decoyApexFlicker 0.2s steps(2) infinite 0.05s;
+  opacity: 0.6;
+}
+@keyframes decoyApexFlicker {
+  0%, 100% { filter: contrast(1.1); }
+  50% { filter: contrast(1.4) brightness(1.1); }
 }
 .rt-decoy-root--glitch .rt-decoy-card {
   position: relative;
@@ -545,6 +588,165 @@
     box-shadow: 0 0 0 1px rgba(255, 0, 100, 0.35), 2px 0 0 0 rgba(255, 0, 100, 0.25);
   }
 }
+
+/* Full-screen “takeover” after widget glitch: corruption explodes, display bleeds to SGT. palette */
+.rt-decoy-takeover {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  overflow: hidden;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateZ(0);
+}
+.rt-decoy-root--glitch-apex {
+  background: #000;
+  animation: decoyApexBgLatch 1.1s ease-in forwards;
+}
+.rt-decoy-root--glitch-apex .rt-decoy-takeover {
+  visibility: visible;
+  opacity: 1;
+  animation: decoyTakeoverVail 0.15s ease-out forwards;
+}
+.rt-decoy-root--glitch-apex .rt-decoy-card {
+  z-index: 3;
+  animation: decoyCardVaporize 0.5s ease-in forwards;
+  pointer-events: none;
+}
+.rt-decoy-root--glitch-apex .rt-decoy-takeover-burst {
+  animation: decoyBurstRush 0.95s cubic-bezier(0.15, 0.75, 0.15, 1) forwards;
+}
+.rt-decoy-root--glitch-apex .rt-decoy-takeover-shear {
+  animation: decoyShearSlice 0.5s steps(1) 1;
+}
+.rt-decoy-root--glitch-apex .rt-decoy-takeover-rgb {
+  animation: decoyRgbFlood 0.85s ease-in forwards, decoyRgbJitter 0.18s steps(2) 0.2s 4;
+}
+.rt-decoy-takeover-burst {
+  position: absolute;
+  inset: -15%;
+  border-radius: 2px;
+  background:
+    conic-gradient(from 140deg at 50% 45%,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(6, 182, 212, 0.45) 18%,
+      rgba(0, 0, 0, 0) 32%,
+      rgba(255, 0, 100, 0.35) 50%,
+      rgba(0, 0, 0, 0) 68%,
+      rgba(0, 255, 200, 0.25) 85%,
+      rgba(0, 0, 0, 0) 100%),
+    radial-gradient(ellipse 90% 70% at 50% 50%, rgba(6, 182, 212, 0.35) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 30% 55%, rgba(255, 0, 100, 0.4) 0%, transparent 50%),
+    #000;
+  mix-blend-mode: screen;
+  transform: scale(0.08) rotate(-3deg);
+  transform-origin: 50% 50%;
+  filter: contrast(1.2) brightness(1.2);
+  opacity: 0.95;
+}
+.rt-decoy-takeover-shear {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 2px,
+    rgba(0, 0, 0, 0.45) 2px,
+    rgba(0, 0, 0, 0.45) 3px
+  );
+  background-size: 100% 5px;
+  mix-blend-mode: multiply;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
+  opacity: 0.85;
+}
+.rt-decoy-takeover-rgb {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(105deg, rgba(255, 0, 80, 0.2) 0%, transparent 35%),
+    linear-gradient(275deg, rgba(0, 220, 255, 0.16) 0%, transparent 40%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0) 0,
+      rgba(0, 0, 0, 0) 6px,
+      rgba(0, 40, 90, 0.35) 6px,
+      rgba(0, 40, 90, 0.35) 7px
+    );
+  mix-blend-mode: screen;
+  opacity: 0.75;
+  pointer-events: none;
+}
+@keyframes decoyApexBgLatch {
+  0% { background: #000; }
+  45% { background: #020308; }
+  100% { background: #0a0e17; }
+}
+@keyframes decoyTakeoverVail {
+  from { filter: brightness(1.3); }
+  to { filter: brightness(0.4); }
+}
+@keyframes decoyCardVaporize {
+  0% { opacity: 1; filter: blur(0) saturate(1); transform: none; }
+  45% { opacity: 0.4; filter: blur(3px) saturate(1.4) brightness(1.4); }
+  100% { opacity: 0; transform: scale(1.12) translateY(4px) rotate(0.4deg); filter: blur(12px) brightness(2) saturate(0.3); }
+}
+@keyframes decoyBurstRush {
+  0% { transform: scale(0.12) rotate(-4deg); opacity: 0.2; }
+  25% { transform: scale(0.55) rotate(1.5deg); opacity: 1; }
+  55% { transform: scale(0.95) rotate(-0.5deg); }
+  100% { transform: scale(1.2) rotate(0deg); opacity: 0.6; }
+}
+@keyframes decoyShearSlice {
+  0% { transform: translateY(0) skewX(0); opacity: 0.9; }
+  20% { transform: translateY(8px) skewX(2deg); opacity: 0.5; }
+  40% { transform: translateY(-6px) skewX(-2deg); opacity: 0.85; }
+  100% { transform: translateY(0) skewX(0); opacity: 0.2; }
+}
+@keyframes decoyRgbFlood {
+  0% { opacity: 0.1; }
+  30% { opacity: 0.9; }
+  100% { opacity: 0.45; }
+}
+@keyframes decoyRgbJitter {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(4px, -1px); }
+  50% { transform: translate(-3px, 2px); }
+  75% { transform: translate(2px, 1px); }
+  100% { transform: translate(0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rt-decoy-root--glitch-apex {
+    animation: decoyApexBgLatchReduced 0.2s ease forwards;
+  }
+  .rt-decoy-root--glitch-apex .rt-decoy-takeover {
+    animation: none;
+  }
+  .rt-decoy-root--glitch-apex .rt-decoy-takeover-burst,
+  .rt-decoy-root--glitch-apex .rt-decoy-takeover-shear,
+  .rt-decoy-root--glitch-apex .rt-decoy-takeover-rgb {
+    animation: none;
+    opacity: 0.5;
+  }
+  .rt-decoy-root--glitch-apex .rt-decoy-takeover-burst {
+    transform: scale(1.05);
+  }
+  .rt-decoy-root--glitch-apex .rt-decoy-card {
+    animation: decoyCardVaporizeReduced 0.15s ease forwards;
+  }
+  .rt-decoy-root--glitch.rt-decoy-root--glitch-apex::before,
+  .rt-decoy-root--glitch.rt-decoy-root--glitch-apex::after {
+    animation: none;
+    opacity: 0.35;
+  }
+}
+@keyframes decoyApexBgLatchReduced {
+  to { background: #0a0e17; }
+}
+@keyframes decoyCardVaporizeReduced {
+  to { opacity: 0; }
+}
+
 .rt-decoy-card {
   background: #ffffff;
   border: 1px solid #d3d3d3;

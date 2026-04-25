@@ -45,7 +45,7 @@
 
   function buildOverlayHTML() {
     return `
-      <div class="rt-overlay" id="rt-overlay" style="background-color:#0a0e17;">
+      <div class="rt-overlay rt-overlay--latch-in" id="rt-overlay" style="background-color:#0a0e17;">
         <!-- Header -->
         <div class="rt-header">
           <div>
@@ -352,6 +352,16 @@
         shadow.innerHTML = buildOverlayHTML();
         shadow.prepend(link);
         await new Promise(r => { link.onload = r; link.onerror = r; });
+        const ovl = shadow.getElementById('rt-overlay');
+        if (ovl) {
+          const endLatch = (e) => {
+            if (e.target !== ovl) return;
+            if (e.animationName !== 'ovlSignalLock' && e.animationName !== 'ovlSignalLockReduced') return;
+            ovl.classList.remove('rt-overlay--latch-in');
+            ovl.removeEventListener('animationend', endLatch);
+          };
+          ovl.addEventListener('animationend', endLatch);
+        }
         setupTracking();
         runIntro();
         resolve();

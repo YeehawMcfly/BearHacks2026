@@ -1,14 +1,17 @@
 /**
  * Decoy “normal” CAPTCHA — generic checkbox widget shown before SGT. CAPTCHA.
- * Flow: click → verifying spinner → red X → hand off to main overlay.
+ * Flow: click → spinner → red X → local glitch → full-screen corruption takeover → SGT. overlay latches in.
  */
 (function () {
   /** Spinning “verifying” phase before the X (reCAPTCHA-like). */
   const VERIFY_MS = 2200;
   const HOLD_AFTER_X_MS = 1600;
-  /** CRT / chromatic “system failure” beat before the real captcha. */
-  const GLITCH_MS = 1200;
-  const GLITCH_MS_REDUCED = 240;
+  /** CRT / chromatic “system failure” on the decoy card. */
+  const GLITCH_MS = 1000;
+  const GLITCH_MS_REDUCED = 220;
+  /** Full-screen corruption burst, then SGT. overlay “latches in”. */
+  const TAKEOVER_MS = 1100;
+  const TAKEOVER_MS_REDUCED = 200;
 
   function getHTML() {
     const logoUrl = chrome.runtime.getURL('assets/recaptcha-logo/RecaptchaLogo.svg.png');
@@ -38,6 +41,11 @@
               </div>
             </div>
           </div>
+        </div>
+        <div class="rt-decoy-takeover" aria-hidden="true">
+          <div class="rt-decoy-takeover-burst"></div>
+          <div class="rt-decoy-takeover-shear"></div>
+          <div class="rt-decoy-takeover-rgb"></div>
         </div>
       </div>
     `;
@@ -78,8 +86,10 @@
       const root = shadow.querySelector('.rt-decoy-root');
       if (root) {
         root.classList.add('rt-decoy-root--glitch');
-        const reduceGlitch = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        await delay(reduceGlitch ? GLITCH_MS_REDUCED : GLITCH_MS);
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        await delay(reduceMotion ? GLITCH_MS_REDUCED : GLITCH_MS);
+        root.classList.add('rt-decoy-root--glitch-apex');
+        await delay(reduceMotion ? TAKEOVER_MS_REDUCED : TAKEOVER_MS);
       }
 
       await Promise.resolve(onDone());
