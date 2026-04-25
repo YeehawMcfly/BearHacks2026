@@ -44,7 +44,7 @@ let useMediaPipe = false;
 // Pixel-diff fallback
 let prevData = null;
 
-// Motion tracking for dynamic gestures (wave oscillation, nod, etc.)
+// Motion tracking for dynamic gestures
 let prevWristX = null;
 let prevNoseY = null;
 let prevNoseX = null;
@@ -55,9 +55,21 @@ let lastNodDir = 0;
 let shakeOscillations = 0;
 let lastShakeDir = 0;
 
+// Cycle tracking for full-body gestures
+let jjArmsWereUp = false;   // jumping jack: arms in up position
+let jjCycles = 0;           // completed jumping jack cycles
+let circleQuadrant = -1;    // arm circle: current quadrant (0-3)
+let circlePrevQuadrant = -1;
+let circleQuadrantsHit = new Set(); // quadrants visited in current revolution
+let circleRevolutions = 0;  // completed revolutions
+
 // Consecutive match counter — require N consecutive matching frames
 let consecutiveMatches = 0;
-const MIN_CONSECUTIVE = 3; // need 3 frames in a row to count
+const MIN_CONSECUTIVE = 3;
+
+// Grace period: don't decay for N frames after last match
+let framesSinceLastMatch = 999;
+const GRACE_PERIOD = 10; // ~333ms at 30fps — covers the "down" phase of a jumping jack
 
 // Timestamp tracking
 let lastVideoTime = -1;
@@ -136,10 +148,10 @@ async function initMediaPipe() {
 function checkUserDistance(poseLandmarks) {
   if (!poseLandmarks) return { ok: false, message: 'No body detected' };
 
-  // Check if enough landmarks are visible with decent confidence
-  const visibleCount = poseLandmarks.filter(l => (l.visibility || 0) > 0.5).length;
-  if (visibleCount < 10) {
-    return { ok: false, message: '⚠️ STEP BACK — need to see more of your body' };
+  // Check if enough landmarks are visible
+  const visibleCount = poseLandmarks.filter(l => (l.visibility || 0) > 0.4).length;
+  if (visibleCount < 8) {
+    return { ok: false, message: '⚠️ STEP BACK — need to see your body' };
   }
 
   // Check body spread — if shoulders/hips are too wide in frame, user is too close
@@ -147,19 +159,18 @@ function checkUserDistance(poseLandmarks) {
   const rShoulder = poseLandmarks[12];
   const shoulderWidth = Math.abs(lShoulder.x - rShoulder.x);
 
-  // If shoulders span > 60% of frame width, too close
-  if (shoulderWidth > 0.60) {
-    return { ok: false, message: '⚠️ STEP BACK — you are too close to the camera' };
+  if (shoulderWidth > 0.65) {
+    return { ok: false, message: '⚠️ TOO CLOSE — step back from camera' };
   }
 
-  // For full-body gestures, check if legs are visible
+  // For full-body gestures, check if at least knees are visible
   const g = GESTURE;
   const needsFullBody = g.includes('JUMPING') || g.includes('JACK') || g.includes('SQUAT') ||
                          g.includes('MARCH') || g.includes('CIRCLE') || g.includes('HELICOPTER');
   if (needsFullBody) {
-    const lAnkle = poseLandmarks[27];
-    const rAnkle = poseLandmarks[28];
-    if ((lAnkle.visibility || 0) < 0.3 && (rAnkle.visibility || 0) < 0.3) {
+    const lKnee = poseLandmarks[25];
+    const rKnee = poseLandmarks[26];
+    if ((lKnee.visibility || 0) < 0.3 && (rKnee.visibility || 0) < 0.3) {
       return { ok: false, message: '⚠️ STEP BACK — need to see your full body' };
     }
   }
@@ -247,15 +258,32 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
     return 0;
   }
 
-  // ── JUMPING JACKS: both arms above shoulders + legs apart ──
+  // ── JUMPING JACKS: count arm up/down CYCLES ──
+  // A jumping jack = arms go UP then come back DOWN. We count transitions.
   if (g.includes('JUMPING') || g.includes('JACK')) {
     if (pl) {
       const lWrist = pl[15], rWrist = pl[16];
       const lShoulder = pl[11], rShoulder = pl[12];
-      const lAnkle = pl[27], rAnkle = pl[28];
-      const armsUp = lWrist.y < lShoulder.y - 0.08 && rWrist.y < rShoulder.y - 0.08;
-      const legsApart = Math.abs(lAnkle.x - rAnkle.x) > 0.20;
-      return (armsUp && legsApart) ? 1.0 : 0;
+      // Check if BOTH arms are above shoulders (the "up" position)
+      const armsUp = lWrist.y < lShoulder.y - 0.03 && rWrist.y < rShoulder.y - 0.03;
+      // Check if arms are at rest (below shoulders)
+      const armsDown = lWrist.y > lShoulder.y + 0.03 && rWrist.y > rShoulder.y + 0.03;
+
+      if (armsUp && !jjArmsWereUp) {
+        // Transition: arms went UP — half a cycle
+        jjArmsWereUp = true;
+      } else if (armsDown && jjArmsWereUp) {
+        // Transition: arms came DOWN — complete cycle!
+        jjArmsWereUp = false;
+        jjCycles++;
+        console.log(`[JJ] Cycle ${jjCycles} completed`);
+      }
+
+      // Give credit: need at least 2 complete cycles
+      // Once cycling, give continuous credit during the motion
+      if (jjCycles >= 2) return 1.0;
+      if (armsUp && jjCycles >= 1) return 1.0; // mid-cycle after first completion
+      return 0;
     }
     return 0;
   }
@@ -269,21 +297,38 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
     return 0;
   }
 
-  // ── ARM CIRCLES: track wrist orbit around shoulder ──
+  // ── ARM CIRCLES: track wrist traversing 4 quadrants around shoulder ──
   if (g.includes('ARM') || g.includes('HELICOPTER') || g.includes('CIRCLE')) {
     if (pl) {
-      // Check if either wrist is significantly extended from shoulder
       const lw = pl[15], rw = pl[16], rs = pl[12], ls = pl[11];
+      // Pick the arm that's more extended
       const distL = Math.hypot(lw.x - ls.x, lw.y - ls.y);
       const distR = Math.hypot(rw.x - rs.x, rw.y - rs.y);
-      // Arm must be extended far (not just resting at side)
-      // Also check that wrist is at a varied angle (above, below, or to the side)
-      const maxDist = Math.max(distL, distR);
-      if (maxDist > 0.35) {
-        // Additionally: wrist should NOT be below hip (resting position)
-        const hip = pl[24];
-        const activeWrist = distL > distR ? lw : rw;
-        if (activeWrist.y < hip.y) return 1.0;
+      const wrist = distL > distR ? lw : rw;
+      const shoulder = distL > distR ? ls : rs;
+
+      // Arm must be extended (not resting at side)
+      const dist = Math.max(distL, distR);
+      if (dist > 0.18) {
+        // Determine quadrant: 0=top-right, 1=top-left, 2=bottom-left, 3=bottom-right
+        const dx = wrist.x - shoulder.x;
+        const dy = wrist.y - shoulder.y;
+        const q = (dy < 0 ? 0 : 2) + (dx > 0 ? 0 : 1);
+
+        if (q !== circlePrevQuadrant) {
+          circleQuadrantsHit.add(q);
+          circlePrevQuadrant = q;
+          // If all 4 quadrants hit = one revolution
+          if (circleQuadrantsHit.size >= 4) {
+            circleRevolutions++;
+            circleQuadrantsHit.clear();
+            console.log(`[CIRCLE] Revolution ${circleRevolutions} completed`);
+          }
+        }
+
+        if (circleRevolutions >= 2) return 1.0;
+        if (circleRevolutions >= 1 && circleQuadrantsHit.size >= 2) return 1.0;
+        return 0;
       }
       return 0;
     }
@@ -294,7 +339,7 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
   if (g.includes('MARCH')) {
     if (pl) {
       const lk = pl[25], rk = pl[26];
-      return (Math.abs(lk.y - rk.y) > 0.10) ? 1.0 : 0;
+      return (Math.abs(lk.y - rk.y) > 0.08) ? 1.0 : 0;
     }
     return 0;
   }
@@ -413,13 +458,13 @@ function drawOverlay(w, h, score, poseResult, gestureResult) {
       }
     }
 
-    // Show recognized gesture label
+    // Show recognized gesture label — BIG text for distance viewing
     if (gestureResult?.gestures?.length > 0) {
       const top = gestureResult.gestures[0][0];
       if (top && top.categoryName !== 'None' && top.score > 0.5) {
         octx.fillStyle = '#10b981';
-        octx.font = 'bold 14px monospace';
-        octx.fillText(`Detected: ${top.categoryName} (${Math.round(top.score*100)}%)`, 8, h - 20);
+        octx.font = 'bold 22px monospace';
+        octx.fillText(`✓ ${top.categoryName} (${Math.round(top.score*100)}%)`, 8, h - 30);
       }
     }
   }
@@ -429,30 +474,36 @@ function drawOverlay(w, h, score, poseResult, gestureResult) {
   for (let x = 0; x < w; x += 40) { octx.beginPath(); octx.moveTo(x,0); octx.lineTo(x,h); octx.stroke(); }
   for (let y = 0; y < h; y += 40) { octx.beginPath(); octx.moveTo(0,y); octx.lineTo(w,y); octx.stroke(); }
 
-  // REC dot
+  // REC dot — bigger
   if (Math.floor(frameCount/15) % 2 === 0) {
-    octx.beginPath(); octx.arc(w-16, 14, 5, 0, Math.PI*2);
+    octx.beginPath(); octx.arc(w-20, 18, 7, 0, Math.PI*2);
     octx.fillStyle = '#ff2d2d'; octx.fill();
-    octx.fillStyle = '#fff'; octx.font = '10px monospace'; octx.fillText('REC', w-38, 18);
+    octx.fillStyle = '#fff'; octx.font = 'bold 14px monospace'; octx.fillText('REC', w-52, 23);
   }
 
-  // Mode label
-  octx.fillStyle = 'rgba(6,182,212,0.5)'; octx.font = '10px monospace';
-  octx.fillText(`${useMediaPipe ? '🦴 MEDIAPIPE' : '📡 MOTION'} | TARGET: ${GESTURE}`, 8, 16);
+  // Mode label — bigger for distance
+  octx.fillStyle = 'rgba(6,182,212,0.6)'; octx.font = 'bold 14px monospace';
+  octx.fillText(`${useMediaPipe ? '🦴 MEDIAPIPE' : '📡 MOTION'} | TARGET: ${GESTURE}`, 8, 20);
 
-  // Distance warning
+  // Distance warning — LARGE and centered
   if (distanceWarning) {
-    octx.fillStyle = 'rgba(255,50,50,0.85)';
-    octx.font = 'bold 16px monospace';
+    // Dark backdrop
+    octx.fillStyle = 'rgba(0,0,0,0.6)';
+    octx.fillRect(0, h/2 - 30, w, 50);
+    octx.fillStyle = '#ff4444';
+    octx.font = 'bold 24px monospace';
     const tw = octx.measureText(distanceWarning).width;
     octx.fillText(distanceWarning, (w - tw) / 2, h / 2);
   }
 
-  // Progress bar
+  // Progress bar — THICK (12px) for distance visibility
   const progress = Math.min(Math.max(accumulated, 0) / REQUIRED, 1);
-  octx.fillStyle = 'rgba(0,0,0,0.5)'; octx.fillRect(0, h - 6, w, 6);
+  octx.fillStyle = 'rgba(0,0,0,0.6)'; octx.fillRect(0, h - 14, w, 14);
   octx.fillStyle = score > 0.5 ? '#10b981' : '#06b6d4';
-  octx.fillRect(0, h - 6, w * progress, 6);
+  octx.fillRect(0, h - 14, w * progress, 14);
+  // Progress percentage text on the bar
+  octx.fillStyle = '#fff'; octx.font = 'bold 11px monospace';
+  octx.fillText(`${Math.round(progress*100)}%`, w/2 - 12, h - 3);
 }
 
 // ══════════════════════════════════════════════════
@@ -497,20 +548,25 @@ function loop() {
     prevData = imageData.data.slice();
   }
 
-  // STRICT BINARY ACCUMULATION:
+  // STRICT BINARY ACCUMULATION with GRACE PERIOD:
   // - Score is 1.0 or 0.0 (no partial)
   // - Need 3 consecutive matching frames before accumulating (debounce)
-  // - Progress DECAYS when not matching
+  // - Grace period: no decay for 10 frames after last match (covers cycle gaps)
+  // - Decay: -0.2/frame after grace period expires
   if (score >= 1.0) {
     consecutiveMatches++;
+    framesSinceLastMatch = 0;
     if (consecutiveMatches >= MIN_CONSECUTIVE) {
       accumulated += 1.0;
     }
   } else {
     consecutiveMatches = 0;
-    // Decay: lose 0.3 progress per non-matching frame
-    // This means idle time actively hurts — you can't just wait it out
-    accumulated = Math.max(0, accumulated - 0.3);
+    framesSinceLastMatch++;
+    // Only decay AFTER grace period — allows for natural cycle gaps
+    // (e.g., arms coming down between jumping jacks)
+    if (framesSinceLastMatch > GRACE_PERIOD) {
+      accumulated = Math.max(0, accumulated - 0.2);
+    }
   }
 
   drawOverlay(w, h, score, poseResult, gestureResult);
