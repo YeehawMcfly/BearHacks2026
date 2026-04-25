@@ -1,10 +1,10 @@
-# 🎖️ The Reverse Turing Test — AI Bouncer
+# The Reverse Turing Test — AI Bouncer
 
 > A Chrome Extension that acts as an unhinged AI Drill Sergeant CAPTCHA, blocking your **entire browser** until you prove you're a *perfectly flawed* human.
 
-**Built for BearHacks 2026** 🐻
+**Built for BearHacks 2026**
 
-## 🎯 The Concept
+## The Concept
 
 You know those CAPTCHAs that check if you're a robot? This one checks if you're **too good** at being human — because that means you might be an AI agent.
 
