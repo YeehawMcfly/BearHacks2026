@@ -476,6 +476,60 @@
   overflow: hidden;
   isolation: isolate;
 }
+
+/* Tab overload: same reCAPTCHA card look; only offset + z-index for the cascade */
+.rt-decoy-cascade {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.rt-decoy-layer--stacked {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 300px;
+  max-width: 92vw;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  transform: translate(
+    calc(-50% + 12px + var(--rt-idx, 0) * 22px),
+    calc(-50% + 8px + var(--rt-idx, 0) * 20px)
+  );
+}
+.rt-decoy-layer--stacked .rt-decoy-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.rt-decoy-layer--stacked[data-rt-idx="0"] {
+  pointer-events: auto;
+}
+.rt-decoy-layer--random {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  max-width: 92vw;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.rt-decoy-layer--random .rt-decoy-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 /* Failure → handoff: VHS/CRT-style corruption; apex phase stacks full-screen below. */
 .rt-decoy-root--glitch {
   background: #000;
@@ -531,7 +585,7 @@
 }
 .rt-decoy-root--glitch .rt-decoy-card {
   position: relative;
-  z-index: 3;
+  z-index: auto;
   border-color: #444;
   box-shadow:
     0 0 0 1px rgba(0, 255, 255, 0.25),
@@ -593,7 +647,7 @@
 .rt-decoy-takeover {
   position: absolute;
   inset: 0;
-  z-index: 6;
+  z-index: 200;
   pointer-events: none;
   overflow: hidden;
   visibility: hidden;
@@ -610,7 +664,7 @@
   animation: decoyTakeoverVail 0.15s ease-out forwards;
 }
 .rt-decoy-root--glitch-apex .rt-decoy-card {
-  z-index: 3;
+  z-index: auto;
   animation: decoyCardVaporize 0.5s ease-in forwards;
   pointer-events: none;
 }
