@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SGT. CAPTCHA Control Panel</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <div class="popup-header">
+      <div class="popup-icon">🎖️</div>
+      <div>
+        <div class="popup-title">SGT. CAPTCHA</div>
+        <div class="popup-version">v4.2.0</div>
+      </div>
+    </div>
+
+    <div class="popup-status" id="status">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Loading...</span>
+    </div>
+
+    <div class="popup-info" id="info"></div>
+
+    <div class="popup-actions">
+      <button class="btn btn-reset" id="btn-reset">🔄 RESET VERIFICATION</button>
+      <button class="btn btn-toggle" id="btn-toggle">⏸️ DISABLE EXTENSION</button>
+    </div>
+
+    <div class="popup-footer">
+      The Reverse Turing Test — BearHacks 2026
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

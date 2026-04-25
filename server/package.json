@@ -1,0 +1,17 @@
+{
+  "name": "reverse-turing-test-server",
+  "version": "1.0.0",
+  "description": "Backend API for The Reverse Turing Test — Gemma 4 + ElevenLabs proxy",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0"
+  }
+}

@@ -1,0 +1,125 @@
+/**
+ * Level 3 — Pi Digits Challenge
+ * "Recite the first 20 digits of Pi. You have 30 seconds."
+ * The Goldilocks Trap: too fast = AI agent ban. Too slow = bot.
+ * Sweet spot: 8-20 seconds with at least 1 correction.
+ */
+(function () {
+  const PI_DIGITS = '31415926535897932384';
+  const TIME_LIMIT = 30;
+  let container = null;
+  let shadowRoot = null;
+  let timerInterval = null;
+  let timeRemaining = TIME_LIMIT;
+  let startTime = 0;
+
+  function render(shadow, cont) {
+    shadowRoot = shadow;
+    container = cont;
+    timeRemaining = TIME_LIMIT;
+    startTime = performance.now();
+
+    container.innerHTML = `
+      <div class="rt-challenge-title">LEVEL 3 — COGNITIVE RECALL</div>
+      <div class="rt-challenge-subtitle">Recite the first 20 digits of Pi (no decimal point). You have ${TIME_LIMIT} seconds. <strong style="color:var(--accent-red)">GO.</strong></div>
+      <div class="rt-challenge-content">
+        <div class="rt-pi-display" id="rt-pi-hint">π = 3._ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _</div>
+        <div class="rt-timer" id="rt-timer">${TIME_LIMIT}</div>
+        <input type="text" class="rt-text-input" id="rt-l3-input"
+          placeholder="TYPE THE DIGITS..."
+          maxlength="20"
+          autocomplete="off" autocorrect="off" spellcheck="false"
+          style="font-size:24px; letter-spacing:4px; text-align:center;" />
+        <div class="text-center mt-8" style="font-size:11px; color:var(--text-dim);">
+          Enter all 20 digits: 3, 1, 4, 1, 5, ...
+        </div>
+        <div class="text-center mt-16">
+          <button class="rt-submit-btn" id="rt-l3-submit">SUBMIT DIGITS</button>
+        </div>
+      </div>
+    `;
+
+    const input = shadow.getElementById('rt-l3-input');
+    const timerEl = shadow.getElementById('rt-timer');
+    const piDisplay = shadow.getElementById('rt-pi-hint');
+
+    // Auto-focus
+    setTimeout(() => input.focus(), 100);
+
+    // Track keystrokes
+    input.addEventListener('keydown', (e) => {
+      window.ReverseTest.Goldilocks.trackKeystroke(e.key);
+    });
+
+    // Live feedback — show which digits are correct
+    input.addEventListener('input', () => {
+      const val = input.value;
+      let display = 'π = ';
+      for (let i = 0; i < 20; i++) {
+        if (i === 1) display += '.';
+        if (i < val.length) {
+          const correct = val[i] === PI_DIGITS[i];
+          display += `<span style="color:${correct ? 'var(--accent-green)' : 'var(--accent-red)'}">${val[i]}</span>`;
+        } else {
+          display += '<span style="color:var(--text-dim)">_</span>';
+        }
+        display += ' ';
+      }
+      piDisplay.innerHTML = display;
+    });
+
+    // Countdown timer
+    timerInterval = setInterval(() => {
+      timeRemaining--;
+      timerEl.textContent = timeRemaining;
+      if (timeRemaining <= 5) {
+        timerEl.classList.add('critical');
+        window.ReverseTest.Audio.sfx.tick();
+      }
+      if (timeRemaining <= 0) {
+        clearInterval(timerInterval);
+        // Time's up — auto-fail
+        container.dispatchEvent(new CustomEvent('level-complete', {
+          detail: { passed: false, speedFactor: 0.01, perfect: false, elapsed: TIME_LIMIT, timedOut: true }
+        }));
+      }
+    }, 1000);
+
+    shadow.getElementById('rt-l3-submit').addEventListener('click', () => {
+      clearInterval(timerInterval);
+      container.dispatchEvent(new CustomEvent('level-complete', { detail: validate() }));
+    });
+  }
+
+  function validate() {
+    const input = shadowRoot?.getElementById('rt-l3-input');
+    const answer = (input?.value || '').trim();
+    const correct = answer === PI_DIGITS;
+    const elapsed = (performance.now() - startTime) / 1000;
+
+    // THE GOLDILOCKS TRAP
+    let speedFactor;
+    if (elapsed < 3) speedFactor = 1.0;       // INSTANT — definitely AI
+    else if (elapsed < 5) speedFactor = 0.85;  // Very suspicious
+    else if (elapsed < 8) speedFactor = 0.6;   // Fast but possible
+    else if (elapsed < 20) speedFactor = 0.25;  // Sweet spot — human
+    else speedFactor = 0.15;                    // Slow but okay
+
+    return {
+      passed: correct,
+      speedFactor,
+      perfect: correct && elapsed < 3, // This triggers a BAN
+      elapsed,
+      tooFast: elapsed < 3 && correct,
+      answer
+    };
+  }
+
+  function cleanup() {
+    if (timerInterval) clearInterval(timerInterval);
+    container = null;
+  }
+
+  window.ReverseTest = window.ReverseTest || {};
+  window.ReverseTest.Level3 = { render, validate, cleanup };
+})();

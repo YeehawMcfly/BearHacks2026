@@ -1,0 +1,88 @@
+/**
+ * Content Script — Entry point injected into every page.
+ * Checks state and creates Shadow DOM overlay if needed.
+ */
+(function () {
+  // Don't run on extension pages or chrome:// URLs
+  if (window.location.protocol === 'chrome-extension:' || window.location.protocol === 'chrome:') return;
+
+  // Prevent double injection
+  if (document.getElementById('reverse-turing-test-host')) return;
+
+  async function checkAndInject() {
+    try {
+      const state = await chrome.storage.local.get(['captchaState', 'banReason']);
+      const status = state.captchaState || 'not_started';
+
+      if (status === 'passed') return; // Already verified
+
+      // Create Shadow DOM host
+      const host = document.createElement('div');
+      host.id = 'reverse-turing-test-host';
+      host.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483647;';
+      document.documentElement.appendChild(host);
+
+      const shadow = host.attachShadow({ mode: 'closed' });
+
+      if (status === 'banned') {
+        // Show permanent ban screen
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = chrome.runtime.getURL('styles/overlay.css');
+        shadow.appendChild(link);
+
+        await new Promise(r => { link.onload = r; link.onerror = r; });
+
+        shadow.innerHTML += `
+          <div class="rt-overlay">
+            <div class="rt-ban-screen">
+              <div class="rt-ban-stamp">BANNED</div>
+              <div class="rt-ban-reason">${state.banReason || 'You have been identified as a non-human entity.'}</div>
+              <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);margin-top:20px;">
+                ERROR 0xDEADBEEF — Access permanently revoked.<br>
+                Use the extension popup to reset (if you're actually human).
+              </div>
+            </div>
+          </div>
+        `;
+        // Re-prepend link since innerHTML += removes it
+        shadow.prepend(link);
+        return;
+      }
+
+      // Block all interaction with underlying page
+      host.addEventListener('keydown', e => e.stopPropagation(), true);
+      host.addEventListener('keyup', e => e.stopPropagation(), true);
+
+      // Initialize the overlay
+      window.ReverseTest.Overlay.init(shadow, host);
+
+    } catch (err) {
+      console.error('[Reverse Turing Test] Init error:', err);
+    }
+  }
+
+  // Listen for state changes (e.g., passed from another tab)
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes.captchaState) {
+      const newState = changes.captchaState.newValue;
+      const host = document.getElementById('reverse-turing-test-host');
+      if (newState === 'passed' && host) {
+        host.style.transition = 'opacity 0.5s';
+        host.style.opacity = '0';
+        setTimeout(() => host.remove(), 500);
+      }
+      if (newState === 'not_started') {
+        // Reset — reload to re-trigger
+        window.location.reload();
+      }
+    }
+  });
+
+  // Go
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkAndInject);
+  } else {
+    checkAndInject();
+  }
+})();
