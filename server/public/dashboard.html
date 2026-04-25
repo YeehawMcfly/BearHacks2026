@@ -126,7 +126,35 @@
     .chart-label { position: absolute; top: 0; left: 0; font-size: 10px; color: var(--cyan); opacity: 0.7; }
     
     .panel.tall { grid-row: span 2; }
-    
+
+    /* Status Banner */
+    .status-banner {
+      text-align: center; padding: 10px 20px; font-size: 18px; font-weight: 900;
+      letter-spacing: 6px; color: var(--cyan); text-shadow: var(--glow-cyan);
+      border: 1px solid rgba(0,255,255,0.3); border-radius: 6px;
+      margin-bottom: 16px; z-index: 10; position: relative;
+      background: rgba(0,255,255,0.04); transition: all 0.5s;
+    }
+    .status-banner.warn { color: var(--amber); border-color: rgba(255,170,0,0.5); text-shadow: 0 0 15px rgba(255,170,0,0.5); background: rgba(255,170,0,0.06); }
+    .status-banner.danger { color: var(--red); border-color: rgba(255,42,42,0.6); text-shadow: 0 0 20px rgba(255,42,42,0.6); background: rgba(255,42,42,0.08); animation: shake 0.3s infinite; }
+
+    /* Goldilocks Zone Bar */
+    .zone-bar { display: flex; height: 18px; border-radius: 9px; overflow: hidden; margin-top: 12px; width: 80%; position: relative; }
+    .zone-bar .zone { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; letter-spacing: 1px; }
+    .zone-bar .zone.bot { background: rgba(255,42,42,0.3); color: var(--red); }
+    .zone-bar .zone.human { background: rgba(0,255,0,0.2); color: var(--green); }
+    .zone-bar .zone.ai { background: rgba(255,170,0,0.3); color: var(--amber); }
+    .zone-arrow { position: absolute; top: -8px; transition: left 0.5s; font-size: 12px; transform: translateX(-50%); filter: drop-shadow(0 0 4px #fff); }
+
+    /* Metric flash */
+    .metric.flash-red { border-left-color: var(--red) !important; background: rgba(255,42,42,0.12) !important; }
+    .metric.flash-green { border-left-color: var(--green) !important; background: rgba(0,255,0,0.08) !important; }
+
+    /* Level indicator */
+    .level-info { display: flex; justify-content: space-between; align-items: center; flex: 1; }
+    .level-name { font-size: 28px; font-weight: bold; color: var(--cyan); text-shadow: var(--glow-cyan); }
+    .level-timer { font-size: 40px; font-weight: bold; color: var(--amber); text-shadow: 0 0 20px rgba(255,170,0,0.4); }
+
     @media (max-width: 1200px) {
       .grid { display: flex; flex-direction: column; }
       body { height: auto; overflow: auto; }
@@ -134,6 +162,7 @@
       .heatmap-container { min-height: 300px; }
       h1 { font-size: 20px; }
       .metrics-grid { grid-template-columns: 1fr 1fr; }
+      .status-banner { font-size: 14px; letter-spacing: 3px; }
     }
   </style>
 </head>
@@ -142,6 +171,8 @@
     <h1>SGT CAPTCHA // OVERSEER TERMINAL</h1>
     <div id="connectionStatus" class="status-badge offline">OFFLINE</div>
   </header>
+
+  <div id="statusBanner" class="status-banner">SUBJECT UNDER OBSERVATION</div>
   
   <div class="grid">
     <!-- Big Gauge -->
@@ -149,16 +180,29 @@
       <div class="panel-title">LIVE SUSPICION SCORE</div>
       <div class="gauge-container">
         <div id="scoreDisplay" class="score-value">5</div>
-        <div style="color: var(--cyan); margin-top: 15px; font-size: 12px; letter-spacing: 1px;">THRESHOLD: <span style="color:var(--red);">85 (BAN)</span></div>
+        <div style="position:relative;width:80%;margin-top:12px;">
+          <div class="zone-bar">
+            <div class="zone bot">BOT</div>
+            <div class="zone human">HUMAN</div>
+            <div class="zone ai">AI</div>
+          </div>
+          <div id="zoneArrow" class="zone-arrow" style="left:5%;">▲</div>
+        </div>
+        <div style="color: var(--cyan); margin-top: 10px; font-size: 11px; letter-spacing: 1px;">BAN @ <span style="color:var(--red);">85</span></div>
       </div>
     </div>
     
-    <!-- AI VERDICT -->
+    <!-- Level + AI Verdict -->
     <div class="panel">
-      <div class="panel-title">GEMMA BEHAVIORAL ANALYSIS</div>
-      <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; flex:1; text-align:center;">
-        <div id="aiVerdict" style="font-size:32px; font-weight:bold; color:var(--cyan); margin-bottom:12px; letter-spacing:2px; text-shadow:var(--glow-cyan);">GATHERING DATA</div>
-        <div id="aiReason" style="font-size:12px; color:var(--text); opacity:0.8; font-style:italic; line-height:1.5;">Awaiting sufficient biometrics to formulate verdict...</div>
+      <div class="panel-title">CURRENT LEVEL</div>
+      <div class="level-info">
+        <div id="levelName" class="level-name">STANDBY</div>
+        <div id="levelTimer" class="level-timer">--</div>
+      </div>
+      <div style="margin-top:12px;border-top:1px solid rgba(0,255,255,0.15);padding-top:10px;">
+        <div style="font-size:10px;color:var(--cyan);letter-spacing:1px;margin-bottom:6px;">GEMMA VERDICT</div>
+        <div id="aiVerdict" style="font-size:20px;font-weight:bold;color:var(--cyan);letter-spacing:2px;text-shadow:var(--glow-cyan);">GATHERING DATA</div>
+        <div id="aiReason" style="font-size:11px;color:var(--text);opacity:0.7;font-style:italic;margin-top:4px;">Awaiting biometrics...</div>
       </div>
     </div>
 
@@ -224,14 +268,36 @@
     const entropyEl = document.getElementById('entropyDisplay');
     const varianceEl = document.getElementById('varianceDisplay');
     const correctionsEl = document.getElementById('correctionsDisplay');
-    const levelsEl = document.getElementById('levelsDisplay');
     const statusEl = document.getElementById('connectionStatus');
     const timelineEl = document.getElementById('timeline');
     const ksChart = document.getElementById('ksChart');
     const aiVerdictEl = document.getElementById('aiVerdict');
     const aiReasonEl = document.getElementById('aiReason');
+    const bannerEl = document.getElementById('statusBanner');
+    const zoneArrowEl = document.getElementById('zoneArrow');
+    const levelNameEl = document.getElementById('levelName');
+    const levelTimerEl = document.getElementById('levelTimer');
 
-    
+    // Track previous metric values for flash animation
+    let prevMetrics = { entropy: 0, variance: 0, corrections: 0 };
+    let levelStartTime = null;
+    let levelTimerInterval = null;
+
+    // Ban alarm audio (generated via AudioContext)
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playAlarm() {
+      for (let i = 0; i < 3; i++) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.type = 'square';
+        osc.frequency.value = i % 2 === 0 ? 880 : 660;
+        gain.gain.value = 0.15;
+        osc.start(audioCtx.currentTime + i * 0.2);
+        osc.stop(audioCtx.currentTime + i * 0.2 + 0.15);
+      }
+    }
+
     // Heatmap setup
     const canvas = document.getElementById('heatmapCanvas');
     const ctx = canvas.getContext('2d');
@@ -247,7 +313,6 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
     
-    // Fade out trails slowly
     function fadeHeatmap() {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
       ctx.fillRect(0, 0, width, height);
@@ -255,22 +320,14 @@
     }
     fadeHeatmap();
     
-    // Draw mouse point
     function drawPoint(x, y, isClick) {
-      // Normalize assumed 1920x1080 to canvas size
       const nx = (x / 1920) * width;
       const ny = (y / 1080) * height;
-      
       ctx.beginPath();
       ctx.arc(nx, ny, isClick ? 8 : 2, 0, Math.PI * 2);
       ctx.fillStyle = isClick ? '#ff2d2d' : '#06b6d4';
-      if (isClick) {
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = '#ff2d2d';
-      } else {
-        ctx.shadowBlur = 2;
-        ctx.shadowColor = '#06b6d4';
-      }
+      ctx.shadowBlur = isClick ? 10 : 2;
+      ctx.shadowColor = isClick ? '#ff2d2d' : '#06b6d4';
       ctx.fill();
       ctx.shadowBlur = 0;
     }
@@ -283,21 +340,55 @@
       timelineEl.prepend(el);
       if (timelineEl.children.length > 50) timelineEl.lastChild.remove();
     }
+
+    function flashMetric(id, direction) {
+      const el = document.getElementById(id)?.closest('.metric');
+      if (!el) return;
+      const cls = direction === 'up' ? 'flash-red' : 'flash-green';
+      el.classList.add(cls);
+      setTimeout(() => el.classList.remove(cls), 600);
+    }
+
+    function updateBanner(score) {
+      if (score >= 85) {
+        bannerEl.textContent = '🚨 AI AGENT CONFIRMED — EXECUTING BAN 🚨';
+        bannerEl.className = 'status-banner danger';
+      } else if (score >= 60) {
+        bannerEl.textContent = '⚠️ ANOMALOUS BEHAVIOR DETECTED';
+        bannerEl.className = 'status-banner warn';
+      } else if (score >= 30) {
+        bannerEl.textContent = 'ANALYZING BEHAVIORAL PATTERNS...';
+        bannerEl.className = 'status-banner warn';
+      } else {
+        bannerEl.textContent = 'SUBJECT UNDER OBSERVATION';
+        bannerEl.className = 'status-banner';
+      }
+    }
+
+    function updateZoneArrow(score) {
+      // Map 0-100 to 0%-100% left position
+      const pct = Math.min(Math.max(score, 0), 100);
+      zoneArrowEl.style.left = pct + '%';
+    }
+
+    function startLevelTimer() {
+      levelStartTime = Date.now();
+      if (levelTimerInterval) clearInterval(levelTimerInterval);
+      levelTimerInterval = setInterval(() => {
+        const elapsed = ((Date.now() - levelStartTime) / 1000).toFixed(1);
+        levelTimerEl.textContent = elapsed + 's';
+      }, 100);
+    }
     
     let ksBars = Array(40).fill(0);
     function updateKsChart(intervals) {
       if (!intervals || !intervals.length) return;
-      // Keep last 40 intervals
       ksBars = intervals.slice(-40);
       while(ksBars.length < 40) ksBars.unshift(0);
-      
-      // Remove old bars, keep label
       const label = ksChart.querySelector('.chart-label');
       ksChart.innerHTML = '';
       ksChart.appendChild(label);
-      
       const max = Math.max(...ksBars, 500);
-      
       ksBars.forEach(val => {
         const bar = document.createElement('div');
         bar.className = 'bar';
@@ -328,14 +419,34 @@
         const data = JSON.parse(e.data);
         latestState = data;
         
-        // Update metrics
         const s = data.suspicionScore || 0;
         scoreEl.textContent = Math.round(s);
         scoreEl.className = 'score-value' + (s >= 85 ? ' danger' : s >= 60 ? ' warn' : '');
         
-        entropyEl.textContent = (data.mouseEntropy || 0).toFixed(2);
-        varianceEl.textContent = (data.keystrokeVariance || 0).toFixed(2);
-        correctionsEl.textContent = data.corrections || 0;
+        updateBanner(s);
+        updateZoneArrow(s);
+
+        // Metric flash on change
+        const newEntropy = +(data.mouseEntropy || 0).toFixed(2);
+        const newVariance = +(data.keystrokeVariance || 0).toFixed(2);
+        const newCorrections = data.corrections || 0;
+
+        if (newEntropy !== prevMetrics.entropy) {
+          flashMetric('entropyDisplay', newEntropy > prevMetrics.entropy ? 'up' : 'down');
+          prevMetrics.entropy = newEntropy;
+        }
+        if (newVariance !== prevMetrics.variance) {
+          flashMetric('varianceDisplay', newVariance > prevMetrics.variance ? 'up' : 'down');
+          prevMetrics.variance = newVariance;
+        }
+        if (newCorrections !== prevMetrics.corrections) {
+          flashMetric('correctionsDisplay', 'down'); // corrections = human-like = green
+          prevMetrics.corrections = newCorrections;
+        }
+
+        entropyEl.textContent = newEntropy;
+        varianceEl.textContent = newVariance;
+        correctionsEl.textContent = newCorrections;
         
         const distEl = document.getElementById('distanceDisplay');
         const spdEl = document.getElementById('speedDisplay');
@@ -346,15 +457,38 @@
         
         updateKsChart(data.ksIntervals);
         
-        // Draw new mouse points
         if (data.newMousePts) {
           data.newMousePts.forEach(p => drawPoint(p.x, p.y, p.click));
+        }
+
+        // Update level name from state if available
+        if (data.currentLevel !== undefined) {
+          const names = ['IMAGE GRID', 'WORD CAPTCHA', 'PI RECALL', 'CHESS', 'IMPOSSIBLE MATH', 'GESTURE', 'BODY SCAN', 'SUBMIT'];
+          levelNameEl.textContent = names[data.currentLevel] || 'LEVEL ' + (data.currentLevel + 1);
         }
       });
       
       evtSource.addEventListener('event', (e) => {
         const data = JSON.parse(e.data);
         addEvent(data.message, data.type);
+
+        // Update level indicator from events
+        if (data.type === 'level') {
+          const match = data.message.match(/Level (\d+)/i);
+          if (match) {
+            const idx = parseInt(match[1]) - 1;
+            const names = ['IMAGE GRID', 'WORD CAPTCHA', 'PI RECALL', 'CHESS', 'IMPOSSIBLE MATH', 'GESTURE', 'BODY SCAN', 'SUBMIT'];
+            levelNameEl.textContent = names[idx] || 'LEVEL ' + match[1];
+            startLevelTimer();
+          }
+        }
+
+        // Ban event — alarm + visual
+        if (data.type === 'ban') {
+          playAlarm();
+          document.body.style.animation = 'shake 0.3s 3';
+          setTimeout(() => { document.body.style.animation = ''; }, 1000);
+        }
       });
     }
     
@@ -375,13 +509,16 @@
           aiVerdictEl.style.color = result.verdict === 'HUMAN' ? 'var(--green)' : 
                                     result.verdict === 'SUSPICIOUS' ? 'var(--amber)' : 
                                     'var(--red)';
+          aiVerdictEl.style.textShadow = result.verdict === 'HUMAN' ? '0 0 15px rgba(0,255,0,0.5)' :
+                                          result.verdict === 'SUSPICIOUS' ? '0 0 15px rgba(255,170,0,0.5)' :
+                                          '0 0 15px rgba(255,42,42,0.5)';
           aiReasonEl.textContent = result.reason || 'Confidence: ' + (result.confidence ? Math.round(result.confidence * 100) + '%' : '--');
         }
       } catch (e) {
         console.error("Failed to evaluate AI", e);
       }
     }
-    setInterval(evaluateAI, 8000); // Poll every 8s
+    setInterval(evaluateAI, 8000);
   </script>
 </body>
 </html>
