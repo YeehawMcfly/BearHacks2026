@@ -49,7 +49,6 @@
         "camera.html",
         "js/camera-worker.js",
         "assets/*",
-        "assets/models/*",
         "assets/recaptcha-logo/RecaptchaLogo.svg.png",
         "fonts/*"
       ],
