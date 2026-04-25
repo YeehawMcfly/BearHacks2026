@@ -74,9 +74,9 @@
       else score -= 3; // Normal speed → trust reward
     }
 
-    // ── Accuracy analysis ──
-    if (levelResult.perfect && state.corrections === 0) {
-      score += 8; // Perfect with zero corrections is suspicious
+    // Only suspicious if BOTH perfect AND very fast — slow careful typing is human
+    if (levelResult.perfect && state.corrections === 0 && levelResult.speedFactor > 0.5) {
+      score += 8; // Fast + perfect + zero corrections = likely AI
     } else if (state.corrections > 0) {
       score -= Math.min(state.corrections * 2, 10); // Corrections = very human
     }

@@ -18,7 +18,7 @@
       const state = await chrome.storage.local.get(['captchaState', 'banReason']);
       const status = state.captchaState || 'not_started';
 
-      if (status === 'passed') return; // Already verified
+      if (status === 'passed' || status === 'disabled') return; // Skip injection
 
       // Create Shadow DOM host
       const host = document.createElement('div');
@@ -72,7 +72,7 @@
       if (changes.captchaState) {
         const newState = changes.captchaState.newValue;
         const host = document.getElementById('reverse-turing-test-host');
-        if (newState === 'passed' && host) {
+        if ((newState === 'passed' || newState === 'disabled') && host) {
           host.style.transition = 'opacity 0.5s';
           host.style.opacity = '0';
           setTimeout(() => host.remove(), 500);
