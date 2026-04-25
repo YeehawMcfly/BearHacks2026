@@ -4,7 +4,10 @@
  */
 (function () {
   const SERVER = 'http://localhost:3000';
-  let serverAlive = null; // null = unknown, true/false
+  /** true once /health succeeded; we never cache failure so a late server start still works */
+  let serverKnownUp = false;
+  let lastHealthAttempt = 0;
+  const HEALTH_RETRY_MS = 2000;
 
   const FALLBACK_INSULTS = [
     "You call that human behavior?! My FIREWALL has more personality!",
@@ -22,12 +25,17 @@
   ];
 
   async function checkServer() {
-    if (serverAlive !== null) return serverAlive;
+    if (serverKnownUp) return true;
+    const now = Date.now();
+    if (now - lastHealthAttempt < HEALTH_RETRY_MS) return false;
+    lastHealthAttempt = now;
     try {
       const r = await fetch(`${SERVER}/health`, { signal: AbortSignal.timeout(2000) });
-      serverAlive = r.ok;
-    } catch { serverAlive = false; }
-    return serverAlive;
+      if (r.ok) serverKnownUp = true;
+      return r.ok;
+    } catch {
+      return false;
+    }
   }
 
   async function post(path, body) {
@@ -80,6 +88,6 @@
       return null;
     },
 
-    isServerAlive() { return serverAlive; }
+    isServerAlive() { return serverKnownUp; }
   };
 })();

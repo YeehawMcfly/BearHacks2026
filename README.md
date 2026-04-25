@@ -33,7 +33,7 @@ You know those CAPTCHAs that check if you're a robot? This one checks if you're 
 
 ## 🚀 Setup
 
-### 1. Install the Extension
+The backend and extension are **two separate processes**: start the **Express server in a terminal first** whenever you want Gemma, challenges, and ElevenLabs TTS. Then load (or use) the Chrome extension.
 
 ```bash
 # Clone this repo
@@ -41,12 +41,7 @@ git clone <repo-url>
 cd BearHacks2026
 ```
 
-1. Open Chrome → `chrome://extensions/`
-2. Enable **Developer mode** (top right)
-3. Click **Load unpacked**
-4. Select the `extension/` folder
-
-### 2. Start the Backend (optional — extension works without it)
+### 1. Start the Backend (optional — extension works without it)
 
 ```bash
 cd server
@@ -55,6 +50,15 @@ cp .env.example .env
 npm install
 npm run dev
 ```
+
+Leave this running; it serves `http://localhost:3000` for the extension to call.
+
+### 2. Install the Extension
+
+1. Open Chrome → `chrome://extensions/`
+2. Enable **Developer mode** (top right)
+3. Click **Load unpacked**
+4. Select the `extension/` folder
 
 ### 3. Get API Keys (optional)
 
