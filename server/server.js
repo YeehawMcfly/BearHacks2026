@@ -5,6 +5,7 @@ import { GoogleGenAI } from '@google/genai';
 import { Chess } from 'chess.js';
 import os from 'os';
 import { buildLevel1Remote } from './level1Remote.mjs';
+import { TOPIC_IDS } from './level1Topics.mjs';
 
 const app = express();
 const PORT = 3000;
@@ -156,10 +157,10 @@ app.post('/api/ai/evaluate', async (req, res) => {
   }
 });
 
-// ===== Level 1: fire hydrant only; Pexels +/or LoremFlickr build 9-tile challenge =====
+// ===== Level 1: random topic (hydrant / donut / traffic light); Pexels +/or LoremFlickr, 9 tiles =====
 app.post('/api/ai/level1-captcha', async (req, res) => {
   try {
-    const missionId = 'hydrant';
+    const missionId = TOPIC_IDS[Math.floor(Math.random() * TOPIC_IDS.length)];
     const line1 = 'Select all images that contain';
     const pexelsKey = process.env.PEXELS_API_KEY && process.env.PEXELS_API_KEY !== 'your_pexels_key_here'
       ? process.env.PEXELS_API_KEY

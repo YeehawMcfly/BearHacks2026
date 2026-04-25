@@ -77,7 +77,7 @@
       return { verdict: 'HUMAN', confidence: 0.7, reason: 'Acceptably pathetic.' };
     },
 
-    /** Level 1: fire-hydrant image grid from server (Pexels + LoremFlickr). */
+    /** Level 1: image grid (topic randomized: hydrant, donut, traffic light). */
     async getLevel1Captcha() {
       const r = await post('/api/ai/level1-captcha', {});
       if (r) return (await r.json());

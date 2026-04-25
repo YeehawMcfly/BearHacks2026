@@ -28,7 +28,7 @@
   // ── TEXT ESCALATION ──
   // Act I (normal, calm)
   const NORMAL_INTROS = [
-    "Select every square with a fire hydrant.",
+    "Image check: select every square that shows the object described on screen.",
     "Type the word shown below to verify you're human."
   ];
   // Act II (military, escalating)

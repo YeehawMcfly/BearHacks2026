@@ -4,7 +4,12 @@
  * Fallback: LoremFlickr-only when server unreachable (topic list mirrors server/level1Topics.mjs).
  */
 (function () {
-  const HYDRANT = { label: 'a fire hydrant', loremTag: 'fire,hydrant' };
+  /** Aligned with server/level1Topics.mjs */
+  const L1_OFFLINE_TOPICS = [
+    { id: 'hydrant', label: 'a fire hydrant', loremTag: 'fire,hydrant' },
+    { id: 'donut', label: 'a donut', loremTag: 'doughnut,glazed' },
+    { id: 'traffic_light', label: 'a traffic light', loremTag: 'stoplight,signal' }
+  ];
   const OFFLINE_NEG_TAGS = [
     'shark,underwater', 'penguin,ice', 'volcano,lava', 'galaxy,space', 'desert,landscape', 'eagle,mountain', 'medusa,ocean'
   ];
@@ -29,14 +34,15 @@
     return a;
   }
 
-  /** Fire hydrant only; same ratio as server/level1Remote.mjs when API is unavailable. */
+  /** Same topic pool + layout as server/level1Remote.mjs when API is unavailable. */
   function buildOfflineChallenge() {
-    const kPos = 2;
+    const topic = L1_OFFLINE_TOPICS[Math.floor(Math.random() * L1_OFFLINE_TOPICS.length)];
+    const kPos = 2 + Math.floor(Math.random() * 3);
     const nNeg = 9 - kPos;
     const lock0 = (Date.now() % 200000) + Math.floor(Math.random() * 1000);
     const posUrls = [];
     for (let p = 0; p < kPos; p++) {
-      posUrls.push(loremFlickrUrl(HYDRANT.loremTag, lock0 + p * 17));
+      posUrls.push(loremFlickrUrl(topic.loremTag, lock0 + p * 17));
     }
     const negUrls = [];
     for (let q = 0; q < nNeg; q++) {
@@ -54,8 +60,8 @@
       if (tiles[i].isPositive) correctIndices.push(i);
     }
     return {
-      missionId: 'hydrant',
-      label: HYDRANT.label,
+      missionId: topic.id,
+      label: topic.label,
       line1: 'Select all images that contain',
       imageUrls,
       correctIndices

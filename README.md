@@ -17,7 +17,7 @@ You know those CAPTCHAs that check if you're a robot? This one checks if you're 
 
 | Level | Challenge | The Twist |
 |-------|-----------|-----------|
-| **1** | Select all images with **a fire hydrant** | **2** matching tiles per round; Pexels and/or LoremFlickr (server) |
+| **1** | Select images for the **shown object** (random: **fire hydrant**, **donut**, or **traffic light**) | **2–4** matching tiles per round; Pexels and/or LoremFlickr (server) |
 | **2** | Retype a distorted military word | Typing too fast = suspicious |
 | **3** | Type 20 digits of Pi from memory | Do it in <3 seconds? BANNED. |
 | **4** | Solve impossible math in 5 seconds | Getting it RIGHT = instant ban |
