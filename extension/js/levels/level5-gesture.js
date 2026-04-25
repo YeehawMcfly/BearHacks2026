@@ -47,7 +47,7 @@
   ];
 
   // How many motion-frames to accumulate (progress only goes up, never decays)
-  const REQUIRED_MOTION_FRAMES = 25;
+  const REQUIRED_MOTION_FRAMES = 35;
   // Fraction of pixels that must change to count as a motion frame
   const MOTION_THRESHOLD = 0.025;
 

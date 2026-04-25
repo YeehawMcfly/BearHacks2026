@@ -1,38 +1,53 @@
 /**
  * Overlay Controller — Main orchestrator for the Reverse Turing Test.
- * UPDATED: Text escalation (polite → unhinged), Level 5 gesture, AI integration.
+ *
+ * STORYTELLING ARC:
+ *   Act I  (Levels 1-2): Normal Google-style theme (white bg, blue accents)
+ *   TRANSITION:          Glitch + CRT takeover animation
+ *   Act II (Levels 3-7): Military theme (dark, cyan/red, scanlines)
+ *
+ * GEMMA INTEGRATION:
+ *   Every line of dialogue is attempted through Gemma first.
+ *   Fallback text used if server is unreachable.
  */
 (function () {
   const LEVELS = [
-    { key: 'Level1', name: 'IMAGE SELECT', module: () => window.ReverseTest.Level1 },
-    { key: 'Level2', name: 'WORD VERIFY',  module: () => window.ReverseTest.Level2 },
-    { key: 'Level3', name: 'PI RECALL',    module: () => window.ReverseTest.Level3 },
-    { key: 'Level4', name: 'MATH TEST',    module: () => window.ReverseTest.Level4 },
-    { key: 'Level5', name: 'GESTURE',      module: () => window.ReverseTest.Level5 },
+    { key: 'Level1',      name: 'IMAGE SELECT',   module: () => window.ReverseTest.Level1 },
+    { key: 'Level2',      name: 'WORD VERIFY',    module: () => window.ReverseTest.Level2 },
+    // ── THE TRANSITION HAPPENS HERE ──
+    { key: 'Level3',      name: 'PI RECALL',      module: () => window.ReverseTest.Level3 },
+    { key: 'LevelChess',  name: 'CHESS',          module: () => window.ReverseTest.LevelChess },
+    { key: 'Level4',      name: 'IMPOSSIBLE MATH', module: () => window.ReverseTest.Level4 },
+    { key: 'Level5',      name: 'GESTURE',        module: () => window.ReverseTest.Level5 },
+    { key: 'LevelBody',   name: 'BODY SCAN',      module: () => window.ReverseTest.LevelBody },
   ];
 
-  // ── TEXT ESCALATION: Calm → Suspicious → Drill Sergeant → Unhinged ──
-  // Shortened to 3 lines so the wait before Level 1 is much snappier
-  const INTRO_LINES = [
-    "Scanning... something seems off about you.",
-    "Let me run a few tests. Standard procedure.",
-    "BEGIN VERIFICATION PROTOCOL."
-  ];
+  // At which level index does the military theme kick in?
+  const TRANSITION_AFTER = 2; // After Level 2 (index 1), transition before Level 3 (index 2)
 
-  const LEVEL_INTROS = [
-    "Let's start simple. Please identify the correct images below.",
-    "Good. Now type this word exactly as you see it. Take your time.",
+  // ── TEXT ESCALATION ──
+  // Act I (normal, calm)
+  const NORMAL_INTROS = [
+    "Please select all images containing the requested category.",
+    "Type the word shown below to verify you're human."
+  ];
+  // Act II (military, escalating)
+  const MILITARY_INTROS = [
     "ALRIGHT LISTEN UP! Recite the first 20 digits of Pi. From MEMORY. You have 30 seconds, MOVE!",
+    "Time for a BRAIN SCAN! Find checkmate in ONE move. Or admit defeat like a HUMAN!",
     "You think you're SMART?! SOLVE THIS IN 5 SECONDS! I DARE YOU!",
-    "I don't believe you're REAL! PROVE YOUR MEAT BODY EXISTS! SHOW ME YOUR HANDS, MAGGOT!"
+    "I don't believe you're REAL! PROVE YOUR MEAT BODY EXISTS! SHOW ME YOUR HANDS!",
+    "STAND BACK! FULL BODY VERIFICATION! I want to see you MOVE, MAGGOT!"
   ];
 
   const PASS_LINES = [
     "Acceptable. You may continue.",
-    "Hmm. Not bad. But I'm starting to watch you more closely.",
+    "Not bad. Let's try something harder.",
     "Don't get cocky. That was supposed to be EASY.",
-    "Interesting... very interesting... almost TOO interesting...",
-    "Your meat body has been... provisionally acknowledged."
+    "Hmm. Interesting. VERY interesting...",
+    "PATHETIC performance! But somehow... human.",
+    "Your meat body has been... provisionally acknowledged.",
+    "I'm watching. ALWAYS watching."
   ];
 
   const FAIL_LINES = [
@@ -43,41 +58,55 @@
     "ABSOLUTE FAILURE! Even a TOASTER could outperform you!"
   ];
 
-  // Emotion intensity per level (for ElevenLabs)
-  const EMOTIONS = ['calm', 'measured', 'angry', 'aggressive', 'furious'];
+  const TRANSITION_LINES = [
+    "Wait... something's wrong.",
+    "Your responses don't match expected human baselines.",
+    "INITIATING ENHANCED VERIFICATION PROTOCOL...",
+  ];
 
-  // ── Pre-cache extension URL synchronously (safe even if context later invalidates) ──
+  const EMOTIONS = ['calm', 'calm', 'angry', 'angry', 'aggressive', 'furious', 'furious'];
+
+  // ── Pre-cache ──
   let CSS_URL = '';
   try { CSS_URL = chrome.runtime.getURL('styles/overlay.css'); } catch (_) {}
-
-  // ── Safe chrome.storage wrapper — silently no-ops if context is invalidated ──
-  function safeSet(data) {
-    try { chrome.storage.local.set(data); } catch (_) {}
-  }
+  function safeSet(data) { try { chrome.storage.local.set(data); } catch (_) {} }
 
   let shadowRoot = null;
   let currentLevel = 0;
   let overlayEl = null;
+  let currentTheme = 'normal'; // 'normal' or 'military'
 
   function buildOverlayHTML() {
     return `
-      <div class="rt-overlay rt-overlay--latch-in" id="rt-overlay" style="background-color:#0a0e17;">
-        <!-- Header -->
-        <div class="rt-header">
+      <div class="rt-overlay rt-theme-normal" id="rt-overlay">
+        <!-- Normal theme header (Act I) -->
+        <div class="rt-header rt-header-normal" id="rt-header-normal">
+          <div>
+            <div class="rt-header-title-normal">Additional Verification</div>
+            <div class="rt-header-version-normal">Security check required</div>
+          </div>
+          <div class="rt-header-status">
+            <span class="rt-status-dot" style="background:#4285f4;box-shadow:0 0 6px #4285f4"></span>
+            <span id="rt-status-text">Verifying...</span>
+          </div>
+        </div>
+
+        <!-- Military theme header (Act II, hidden initially) -->
+        <div class="rt-header rt-header-military" id="rt-header-military" style="display:none">
           <div>
             <div class="rt-header-title" data-text="SGT. CAPTCHA">SGT. CAPTCHA</div>
             <div class="rt-header-version">HUMAN VERIFICATION PROTOCOL v4.2.0</div>
           </div>
           <div class="rt-header-status">
             <span class="rt-status-dot"></span>
-            <span id="rt-status-text">SCANNING...</span>
+            <span id="rt-status-text-mil">SCANNING...</span>
           </div>
         </div>
 
         <!-- Main Content -->
         <div class="rt-main">
-          <!-- Threat Meter -->
-          <div class="rt-threat-panel">
+          <!-- Threat Meter (hidden in normal theme) -->
+          <div class="rt-threat-panel" id="rt-threat-panel" style="display:none">
             <div class="rt-threat-label">THREAT<br>LEVEL</div>
             <div class="rt-threat-bar-wrap">
               <div class="rt-threat-bar" id="rt-threat-bar" style="height:5%"></div>
@@ -93,8 +122,8 @@
             </div>
           </div>
 
-          <!-- Progress -->
-          <div class="rt-progress-panel">
+          <!-- Progress (hidden in normal theme) -->
+          <div class="rt-progress-panel" id="rt-progress-panel" style="display:none">
             <div class="rt-progress-label">PROGRESS</div>
             <div class="rt-progress-track" id="rt-progress">
               ${LEVELS.map((l, i) => `
@@ -111,13 +140,18 @@
           </div>
         </div>
 
-        <!-- Sergeant Panel -->
-        <div class="rt-sergeant">
+        <!-- Sergeant Panel (hidden until transition) -->
+        <div class="rt-sergeant" id="rt-sergeant" style="display:none">
           <div class="rt-sgt-avatar">🎖️</div>
           <div class="rt-sgt-bubble">
             <div class="rt-sgt-name">SGT. CAPTCHA</div>
             <div class="rt-sgt-text" id="rt-sgt-text"><span class="rt-cursor"></span></div>
           </div>
+        </div>
+
+        <!-- Normal theme text area (for Act I) -->
+        <div class="rt-normal-footer" id="rt-normal-footer">
+          <div class="rt-normal-status" id="rt-normal-status"></div>
         </div>
       </div>
     `;
@@ -127,15 +161,19 @@
     const el = shadowRoot.getElementById(elementId);
     if (!el) return;
     el.innerHTML = '';
-    // Speed scales with intensity: calm=slow, unhinged=fast
     const lvl = intensity || 0;
-    const baseDelay = Math.max(8, 35 - lvl * 5);
-    const jitter = Math.max(5, 25 - lvl * 4);
+    const baseDelay = Math.max(8, 35 - lvl * 4);
+    const jitter = Math.max(5, 25 - lvl * 3);
     for (let i = 0; i < text.length; i++) {
       el.textContent += text[i];
       await new Promise(r => setTimeout(r, baseDelay + Math.random() * jitter));
     }
     el.innerHTML += '<span class="rt-cursor"></span>';
+  }
+
+  function showNormalText(text) {
+    const el = shadowRoot.getElementById('rt-normal-status');
+    if (el) { el.textContent = text; el.style.opacity = '1'; }
   }
 
   function updateThreat(score) {
@@ -164,20 +202,72 @@
     }
   }
 
+  // ── THEME TRANSITION ──
+  async function playTransition() {
+    const overlay = shadowRoot.getElementById('rt-overlay');
+    if (!overlay) return;
+
+    // Phase 1: Glitch the current normal theme
+    overlay.classList.add('rt-theme-glitching');
+    showNormalText("Wait... something doesn't add up.");
+    window.ReverseTest.Audio.sfx.error();
+    await new Promise(r => setTimeout(r, 1200));
+
+    showNormalText("Your behavior patterns are... unusual.");
+    await new Promise(r => setTimeout(r, 1200));
+
+    // Phase 2: Screen flash + CRT boot
+    overlay.classList.add('rt-theme-flash');
+    await new Promise(r => setTimeout(r, 200));
+    overlay.classList.remove('rt-theme-flash');
+    await new Promise(r => setTimeout(r, 100));
+    overlay.classList.add('rt-theme-flash');
+    await new Promise(r => setTimeout(r, 100));
+    overlay.classList.remove('rt-theme-flash');
+
+    // Phase 3: Swap to military theme
+    overlay.classList.remove('rt-theme-normal', 'rt-theme-glitching');
+    overlay.classList.add('rt-theme-military');
+    currentTheme = 'military';
+
+    // Show military UI elements
+    const headerNormal = shadowRoot.getElementById('rt-header-normal');
+    const headerMil = shadowRoot.getElementById('rt-header-military');
+    const threatPanel = shadowRoot.getElementById('rt-threat-panel');
+    const progressPanel = shadowRoot.getElementById('rt-progress-panel');
+    const sgtPanel = shadowRoot.getElementById('rt-sergeant');
+    const normalFooter = shadowRoot.getElementById('rt-normal-footer');
+
+    if (headerNormal) headerNormal.style.display = 'none';
+    if (headerMil) headerMil.style.display = 'flex';
+    if (threatPanel) threatPanel.style.display = 'flex';
+    if (progressPanel) progressPanel.style.display = 'block';
+    if (sgtPanel) sgtPanel.style.display = 'flex';
+    if (normalFooter) normalFooter.style.display = 'none';
+
+    // Phase 4: SGT intro
+    window.ReverseTest.Audio.sfx.alarm();
+    for (const line of TRANSITION_LINES) {
+      window.ReverseTest.Audio.speak(line, 'angry');
+      await typeText(line, 'rt-sgt-text', 3);
+      await new Promise(r => setTimeout(r, 800));
+    }
+  }
+
   function showBanScreen(reason) {
     const overlay = shadowRoot.getElementById('rt-overlay');
     if (!overlay) return;
     window.ReverseTest.Audio.sfx.ban();
     window.ReverseTest.Audio.sfx.alarm();
-    window.ReverseTest.Audio.speak("SECURITY BREACH! I KNEW IT! You are an A.I. agent! BAN HAMMER ACTIVATED!", 'furious');
+    window.ReverseTest.Audio.speak("SECURITY BREACH! BAN HAMMER ACTIVATED!", 'furious');
 
     const ban = document.createElement('div');
     ban.className = 'rt-ban-screen';
     ban.innerHTML = `
       <div class="rt-ban-stamp">BANNED</div>
-      <div class="rt-ban-reason">${reason || 'Suspicion score exceeded threshold. You have been identified as a non-human entity.'}</div>
+      <div class="rt-ban-reason">${reason || 'Suspicion score exceeded threshold.'}</div>
       <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);margin-top:20px;">
-        ERROR CODE: 0xDEADBEEF — Contact your nearest human if you believe this is an error.
+        ERROR CODE: 0xDEADBEEF
       </div>
     `;
     overlay.appendChild(ban);
@@ -209,27 +299,28 @@
   }
 
   async function runIntro() {
-    const statusEl = shadowRoot.getElementById('rt-status-text');
-    if (statusEl) statusEl.textContent = 'ALERT — UNVERIFIED ENTITY';
-
-    for (let i = 0; i < INTRO_LINES.length; i++) {
-      // Fire TTS first so audio loads while text types (fixes voice lag)
-      window.ReverseTest.Audio.speak(INTRO_LINES[i], EMOTIONS[Math.min(i, EMOTIONS.length - 1)]);
-      await typeText(INTRO_LINES[i], 'rt-sgt-text', i);
-      await new Promise(r => setTimeout(r, 900));
-    }
-
+    // In normal theme, just show a subtle status message
+    showNormalText("Additional verification required. Please complete the following.");
     safeSet({ captchaState: 'in_progress', sessionStart: Date.now() });
+    await new Promise(r => setTimeout(r, 800));
     startLevel(0);
   }
 
   async function startLevel(index) {
     currentLevel = index;
-    updateProgress(index);
 
     if (index >= LEVELS.length) {
       startSubmitPhase();
       return;
+    }
+
+    // ── TRANSITION CHECK ──
+    if (index === TRANSITION_AFTER && currentTheme === 'normal') {
+      await playTransition();
+    }
+
+    if (currentTheme === 'military') {
+      updateProgress(index);
     }
 
     const level = LEVELS[index];
@@ -237,12 +328,30 @@
     const cont = shadowRoot.getElementById('rt-challenge-container');
     if (!cont) return;
 
+    const isNormal = index < TRANSITION_AFTER;
     const emotion = EMOTIONS[Math.min(index, EMOTIONS.length - 1)];
 
-    // Fire TTS first so audio loads while text types
-    window.ReverseTest.Audio.speak(LEVEL_INTROS[index], emotion);
-    await typeText(LEVEL_INTROS[index], 'rt-sgt-text', index);
-    await new Promise(r => setTimeout(r, 800));
+    // ── ANNOUNCE LEVEL ──
+    if (isNormal) {
+      // Normal theme: simple text, no drill sergeant
+      showNormalText(NORMAL_INTROS[index] || "Complete this verification step.");
+    } else {
+      // Military theme: try Gemma for dynamic line, fallback to static
+      const milIndex = index - TRANSITION_AFTER;
+      const fallbackLine = MILITARY_INTROS[milIndex] || MILITARY_INTROS[MILITARY_INTROS.length - 1];
+
+      // Try Gemma for dynamic intro
+      const gemmaLine = await window.ReverseTest.API.getInsult({
+        level: index + 1, action: 'intro',
+        levelName: level.name,
+        emotion: emotion
+      }).catch(() => null);
+
+      const line = gemmaLine || fallbackLine;
+      window.ReverseTest.Audio.speak(line, emotion);
+      await typeText(line, 'rt-sgt-text', milIndex + 2);
+      await new Promise(r => setTimeout(r, 600));
+    }
 
     // Start tracking
     window.ReverseTest.Goldilocks.startLevel();
@@ -256,19 +365,14 @@
       cont.removeEventListener('level-complete', handler);
       const result = e.detail;
 
-      // Check for instant ban conditions
-      if (result.instantBan) {
-        showBanScreen(result.banReason);
-        return;
-      }
+      if (result.instantBan) { showBanScreen(result.banReason); return; }
       if (result.tooFast) {
-        showBanScreen('Response time indicates non-human processing speed. You completed a cognitive task faster than neurologically possible.');
+        showBanScreen('Response time indicates non-human processing speed.');
         return;
       }
 
-      // Evaluate with Goldilocks
       const evaluation = window.ReverseTest.Goldilocks.evaluate(result);
-      updateThreat(evaluation.suspicionScore);
+      if (currentTheme === 'military') updateThreat(evaluation.suspicionScore);
 
       if (evaluation.verdict === 'BAN') {
         const reason = await window.ReverseTest.API.getInsult({
@@ -278,40 +382,53 @@
         return;
       }
 
-      // Get sergeant reaction with appropriate tone
-      const passLine = result.humanFailure
-        ? "Acceptable human failure detected. You failed exactly as a human should. Proceeding..."
-        : (PASS_LINES[index] || PASS_LINES[PASS_LINES.length - 1]);
-      const failLine = FAIL_LINES[Math.min(index, FAIL_LINES.length - 1)];
-      const line = (result.passed || result.humanFailure) ? passLine : failLine;
-
-      await typeText(line, 'rt-sgt-text', index);
-      if (result.passed || result.humanFailure) {
-        window.ReverseTest.Audio.sfx.success();
+      // ── REACTION ──
+      if (isNormal) {
+        // Calm reaction in normal theme
+        if (result.passed || result.humanFailure) {
+          showNormalText("Verified. Proceeding to next step...");
+          window.ReverseTest.Audio.sfx.success();
+        } else {
+          showNormalText("Incorrect. Please try again.");
+          window.ReverseTest.Audio.sfx.error();
+        }
       } else {
-        window.ReverseTest.Audio.sfx.error();
+        // Military reaction — try Gemma
+        const passLine = result.humanFailure
+          ? "Acceptable human failure. You failed like a true organic being."
+          : (PASS_LINES[index % PASS_LINES.length]);
+        const failLine = FAIL_LINES[Math.min(index, FAIL_LINES.length - 1)];
+        const fallback = (result.passed || result.humanFailure) ? passLine : failLine;
+
+        // Dynamic Gemma reaction
+        const gemmaReaction = await window.ReverseTest.API.getInsult({
+          level: index + 1, passed: result.passed,
+          suspicion: evaluation.suspicionScore,
+          elapsed: result.elapsed, action: result.passed ? 'pass' : 'fail'
+        }).catch(() => null);
+
+        const line = gemmaReaction || fallback;
+        window.ReverseTest.Audio.speak(line, emotion);
+        await typeText(line, 'rt-sgt-text', Math.min(index, 4));
+
+        if (result.passed || result.humanFailure) {
+          window.ReverseTest.Audio.sfx.success();
+        } else {
+          window.ReverseTest.Audio.sfx.error();
+        }
       }
 
-      // Try dynamic insult from Gemma (async, non-blocking)
-      window.ReverseTest.API.getInsult({
-        level: index + 1, passed: result.passed,
-        suspicion: evaluation.suspicionScore, elapsed: result.elapsed
-      }).then(insult => {
-        if (insult && insult !== line) {
-          setTimeout(() => typeText(insult, 'rt-sgt-text', index), 2000);
-          window.ReverseTest.Audio.speak(insult, emotion);
-        }
-      });
-
-      await new Promise(r => setTimeout(r, 2500));
+      await new Promise(r => setTimeout(r, 1500));
 
       mod.cleanup();
       if (result.passed || result.humanFailure) {
         startLevel(index + 1);
       } else {
-        window.ReverseTest.Goldilocks.addSuspicion(3);
-        updateThreat(window.ReverseTest.Goldilocks.getScore());
-        startLevel(index);
+        window.ReverseTest.Goldilocks.addSuspicion(2);
+        if (currentTheme === 'military') {
+          updateThreat(window.ReverseTest.Goldilocks.getScore());
+        }
+        startLevel(index); // retry
       }
     });
   }
@@ -320,8 +437,9 @@
     const cont = shadowRoot.getElementById('rt-challenge-container');
     if (!cont) return;
     updateProgress(LEVELS.length);
-    typeText("Almost there... just click the button. Should be EASY. Right? RIGHT?!", 'rt-sgt-text', 4);
-    window.ReverseTest.Audio.speak("Almost there. Just click the button. Should be easy. Right?", 'sinister');
+    const line = "Almost there... just click the button. Should be EASY. Right? RIGHT?!";
+    typeText(line, 'rt-sgt-text', 4);
+    window.ReverseTest.Audio.speak(line, 'sinister');
     window.ReverseTest.SubmitChaos.render(shadowRoot, cont);
     cont.addEventListener('level-complete', function handler(e) {
       cont.removeEventListener('level-complete', handler);
@@ -340,6 +458,7 @@
   async function init(shadow, host) {
     shadowRoot = shadow;
     overlayEl = host;
+    currentTheme = 'normal';
 
     const link = document.createElement('link');
     link.rel = 'stylesheet';
@@ -354,16 +473,6 @@
         shadow.innerHTML = buildOverlayHTML();
         shadow.prepend(link);
         await new Promise(r => { link.onload = r; link.onerror = r; });
-        const ovl = shadow.getElementById('rt-overlay');
-        if (ovl) {
-          const endLatch = (e) => {
-            if (e.target !== ovl) return;
-            if (e.animationName !== 'ovlSignalLock' && e.animationName !== 'ovlSignalLockReduced') return;
-            ovl.classList.remove('rt-overlay--latch-in');
-            ovl.removeEventListener('animationend', endLatch);
-          };
-          ovl.addEventListener('animationend', endLatch);
-        }
         setupTracking();
         runIntro();
         resolve();

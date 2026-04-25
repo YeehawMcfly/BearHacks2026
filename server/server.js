@@ -39,19 +39,39 @@ app.get('/health', (_, res) => res.json({
   elevenlabs: !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_API_KEY !== 'your_elevenlabs_key_here')
 }));
 
-// ===== Gemma 4: Generate Insult =====
+// ===== Gemma 4: Generate SGT Line (insult, intro, pass reaction, fail reaction) =====
 app.post('/api/ai/insult', async (req, res) => {
   if (!ai) return res.status(503).json({ error: 'Gemma 4 not configured' });
   try {
     const { context } = req.body;
-    const emotion = context.level <= 1 ? 'calm' : context.level <= 2 ? 'measured' : context.level <= 3 ? 'angry' : 'furious';
-    const prompt = `${getPrompt(emotion)}\n\nContext: The user just ${context.action === 'ban' ? 'got BANNED' : context.passed ? 'passed' : 'failed'} level ${context.level}. Suspicion score: ${context.suspicion || context.score || 'unknown'}%. Time taken: ${context.elapsed ? context.elapsed.toFixed(1) + 's' : 'unknown'}. Generate a reaction.`;
+    const emotion = context.emotion || (context.level <= 2 ? 'calm' : context.level <= 4 ? 'angry' : 'furious');
+    
+    let situation = '';
+    switch (context.action) {
+      case 'intro':
+        situation = `Introduce level ${context.level} (${context.levelName || 'unknown'}). Give the user an instruction in character. Be ${emotion}. 1-2 sentences.`;
+        break;
+      case 'pass':
+        situation = `The user just PASSED level ${context.level}. React. Suspicion: ${context.suspicion || 'unknown'}%. Time: ${context.elapsed ? context.elapsed.toFixed(1) + 's' : 'unknown'}. Be ${emotion} but grudgingly acknowledge them. 1-2 sentences.`;
+        break;
+      case 'fail':
+        situation = `The user just FAILED level ${context.level}. Roast them. Suspicion: ${context.suspicion || 'unknown'}%. Be ${emotion} and insulting. 1-2 sentences.`;
+        break;
+      case 'ban':
+        situation = `The user just got BANNED. Suspicion: ${context.score || context.suspicion}%. Deliver a final devastating line. Be ${emotion}. 1 sentence.`;
+        break;
+      default:
+        situation = `React to the user at level ${context.level}. Suspicion: ${context.suspicion || context.score || 'unknown'}%. Be ${emotion}. 1-2 sentences.`;
+    }
+
+    const prompt = `${getPrompt(emotion)}\n\n${situation}\n\nIMPORTANT: Respond with ONLY the dialogue line. No quotes, no formatting, no stage directions. Just the words SGT. CAPTCHA would say.`;
 
     const response = await ai.models.generateContent({
       model: 'gemma-4-26b-a4b-it',
       contents: prompt
     });
-    res.json({ text: response.text });
+    const text = response.text.replace(/^"|"$/g, '').trim();
+    res.json({ text });
   } catch (e) {
     console.error('Gemma error:', e.message);
     res.status(500).json({ error: e.message });
@@ -83,18 +103,53 @@ app.post('/api/ai/challenge', async (req, res) => {
   try {
     const { level } = req.body;
     const prompts = {
-      1: 'Generate an absurd CAPTCHA category for image selection (e.g., "existential dread"). Just the category name.',
-      2: 'Generate a single military jargon word (8-15 chars) for a distorted text CAPTCHA. Just the word.',
-      3: 'Generate a taunting one-liner for someone trying to type Pi from memory. Be a drill sergeant.',
-      4: 'Generate an extremely complex math equation. Format with unicode math symbols.',
-      5: 'Generate a body gesture or hand sign for a webcam verification. Just the name (e.g., "Thumbs Up", "Peace Sign", "T-Pose").'
+      1: 'Generate ONE absurd but funny CAPTCHA image-selection category. Examples: "existential dread", "suspicious activities", "images a bot would pick". Respond with ONLY the category name, nothing else. 2-4 words max.',
+      2: 'Generate ONE single military jargon word (6-12 characters, all caps) for a text verification CAPTCHA. Respond with ONLY the word.',
+      3: 'Generate a taunting one-liner for someone trying to type Pi from memory. Be a drill sergeant. 1 sentence only.',
+      4: 'Generate a chess-related taunt about needing to find checkmate. Be a drill sergeant. 1 sentence only.',
+      5: 'Generate a body gesture or hand sign name for webcam verification. Choose from: Wave, Thumbs Up, Clap, Nod, Salute, Head Shake. Respond with ONLY the gesture name.',
+      7: 'Generate a full-body exercise for webcam verification. Choose from: Jumping Jacks, Squats, Arm Circles, March in Place. Respond with ONLY the exercise name.'
     };
     const response = await ai.models.generateContent({
       model: 'gemma-4-26b-a4b-it',
       contents: `${getPrompt('angry')}\n\n${prompts[level] || prompts[1]}`
     });
-    res.json({ text: response.text.trim() });
+    res.json({ text: response.text.replace(/^"|"$/g, '').trim() });
   } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ===== Gemma 4: Generate Chess Puzzle =====
+app.post('/api/ai/chess', async (req, res) => {
+  if (!ai) return res.status(503).json({ error: 'Gemma 4 not configured' });
+  try {
+    const prompt = `Generate a simple chess checkmate-in-1 puzzle. White to move.
+
+Return ONLY valid JSON with no other text:
+{
+  "fen": "FEN string of the position",
+  "solution": { "from": [row, col], "to": [row, col] },
+  "hint": "A short hint (1 sentence)"
+}
+
+Row 0 = rank 8 (black's back rank), Col 0 = a-file.
+Example: {"fen": "k7/8/1K6/8/8/8/8/Q7 w - - 0 1", "solution": {"from": [7,0], "to": [1,0]}, "hint": "The queen controls the file."}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemma-4-26b-a4b-it',
+      contents: prompt
+    });
+    const text = response.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const puzzle = JSON.parse(text);
+    // Validate structure
+    if (puzzle.fen && puzzle.solution && puzzle.solution.from && puzzle.solution.to) {
+      res.json(puzzle);
+    } else {
+      res.status(500).json({ error: 'Invalid puzzle structure' });
+    }
+  } catch (e) {
+    console.error('Chess generation error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
