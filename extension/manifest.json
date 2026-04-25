@@ -4,6 +4,9 @@
   "version": "2.0.0",
   "description": "An AI Drill Sergeant CAPTCHA that thinks YOU are the bot. Prove you're human — or get banned.",
   "permissions": ["storage", "tabs"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  },
   "background": {
     "service_worker": "background.js"
   },
@@ -49,6 +52,7 @@
         "camera.html",
         "js/camera-worker.js",
         "assets/*",
+        "assets/models/*",
         "assets/recaptcha-logo/RecaptchaLogo.svg.png",
         "fonts/*"
       ],
