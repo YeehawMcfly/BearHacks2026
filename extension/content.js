@@ -18,8 +18,18 @@
 
   async function checkAndInject() {
     try {
-      const state = await chrome.storage.local.get(['captchaState', 'banReason']);
+      const state = await chrome.storage.local.get(['captchaState', 'banReason', 'whitelistedDomains']);
       const status = state.captchaState || 'not_started';
+      const whitelistedDomains = state.whitelistedDomains || [];
+
+      // Check if current hostname is whitelisted
+      const currentHost = window.location.hostname.replace(/^www\./, '');
+      const isWhitelisted = whitelistedDomains.some(domain => currentHost.includes(domain));
+
+      if (isWhitelisted) {
+        console.log('[Reverse Turing Test] Domain is whitelisted. Skipping CAPTCHA.');
+        return;
+      }
 
       if (status === 'passed' || status === 'disabled') return; // Skip injection
 

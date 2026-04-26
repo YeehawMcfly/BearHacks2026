@@ -5,8 +5,8 @@
  */
 
 // Initialize state on install
-chrome.runtime.onInstalled.addListener(async () => {
-  const { captchaState } = await chrome.storage.local.get('captchaState');
+chrome.runtime.onInstalled.addListener(async (details) => {
+  const { captchaState, whitelistedDomains } = await chrome.storage.local.get(['captchaState', 'whitelistedDomains']);
   if (!captchaState) {
     await chrome.storage.local.set({
       captchaState: 'not_started',
@@ -15,6 +15,15 @@ chrome.runtime.onInstalled.addListener(async () => {
       banReason: '',
       sessionStart: null
     });
+  }
+  if (!whitelistedDomains) {
+    await chrome.storage.local.set({
+      whitelistedDomains: []
+    });
+  }
+  
+  if (details.reason === 'install') {
+    chrome.tabs.create({ url: 'options.html' });
   }
   updateBadge('not_started');
 });

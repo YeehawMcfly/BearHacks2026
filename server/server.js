@@ -131,7 +131,7 @@ app.post('/api/ai/insult', async (req, res) => {
     const prompt = `${getPrompt(emotion)}\n\n${situation}\n\nIMPORTANT: Respond with ONLY the dialogue line. No quotes, no formatting, no stage directions. Just the words SGT. CAPTCHA would say.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemma-4-26b-a4b-it',
+      model: 'gemma-4-31b-it',
       contents: prompt
     });
     const text = response.text.replace(/^"|"$/g, '').trim();
@@ -150,7 +150,7 @@ app.post('/api/ai/evaluate', async (req, res) => {
     const prompt = `${getPrompt('angry')}\n\nAnalyze this user behavior data and determine if they are human or AI:\n- Suspicion score: ${behaviorData.suspicionScore}%\n- Mouse entropy: ${behaviorData.mouseEntropy?.toFixed(3)}\n- Keystroke variance: ${behaviorData.keystrokeVariance?.toFixed(3)}\n- Corrections: ${behaviorData.corrections}\n- Total time: ${behaviorData.totalTime?.toFixed(1)}s\n\nRespond in JSON only: {"verdict": "HUMAN"|"SUSPICIOUS"|"AI_AGENT", "confidence": 0.0-1.0, "reason": "your explanation in character"}`;
 
     const response = await ai.models.generateContent({
-      model: 'gemma-4-26b-a4b-it',
+      model: 'gemma-4-31b-it',
       contents: prompt
     });
     const text = response.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -203,7 +203,7 @@ app.post('/api/ai/challenge', async (req, res) => {
       7: 'Generate a full-body exercise for webcam verification. Choose from: Jumping Jacks, Squats, Arm Circles, March in Place. Respond with ONLY the exercise name.'
     };
     const response = await ai.models.generateContent({
-      model: 'gemma-4-26b-a4b-it',
+      model: 'gemma-4-31b-it',
       contents: `${getPrompt('angry')}\n\n${prompts[level] || prompts[2]}`
     });
     res.json({ text: response.text.replace(/^"|"$/g, '').trim() });
@@ -300,7 +300,7 @@ Return ONLY valid JSON, no other text:
 }`;
 
     const response = await ai.models.generateContent({
-      model: 'gemma-4-26b-a4b-it',
+      model: 'gemma-4-31b-it',
       contents: prompt
     });
     const text = response.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SGT CAPTCHA - Setup</title>
+  <link rel="stylesheet" href="styles/overlay.css">
+  <style>
+    body {
+      background-color: #050a11;
+      color: #e2e8f0;
+      font-family: 'Courier New', Courier, monospace;
+      padding: 40px;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 600px;
+      width: 100%;
+      background: rgba(10, 15, 25, 0.7);
+      border: 1px solid rgba(6, 182, 212, 0.5);
+      border-radius: 8px;
+      padding: 30px;
+      box-shadow: inset 0 0 20px rgba(0,255,255,0.05), 0 5px 15px rgba(0,0,0,0.5);
+      position: relative;
+    }
+    h1 {
+      color: #0ff;
+      text-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+      margin-top: 0;
+      font-size: 24px;
+      border-bottom: 1px solid rgba(0,255,255,0.2);
+      padding-bottom: 10px;
+    }
+    p {
+      color: #64748b;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .input-group {
+      display: flex;
+      margin-top: 20px;
+      gap: 10px;
+    }
+    input[type="text"] {
+      flex: 1;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid #06b6d4;
+      color: #0ff;
+      padding: 10px;
+      font-family: 'Courier New', Courier, monospace;
+      border-radius: 4px;
+      outline: none;
+    }
+    input[type="text"]:focus {
+      box-shadow: 0 0 10px rgba(0,255,255,0.3);
+    }
+    button {
+      background: rgba(0,255,255,0.1);
+      color: #0ff;
+      border: 1px solid #06b6d4;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-family: 'Courier New', Courier, monospace;
+      font-weight: bold;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    button:hover {
+      background: rgba(0,255,255,0.2);
+      box-shadow: 0 0 10px rgba(0,255,255,0.4);
+    }
+    ul {
+      list-style-type: none;
+      padding: 0;
+      margin-top: 30px;
+    }
+    li {
+      background: rgba(255,255,255,0.02);
+      border-left: 3px solid #10b981;
+      padding: 10px 15px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .remove-btn {
+      background: rgba(255,0,0,0.1);
+      color: #ff2a2a;
+      border-color: #ff2a2a;
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+    .remove-btn:hover {
+      background: rgba(255,0,0,0.2);
+      box-shadow: 0 0 10px rgba(255,0,0,0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>SGT CAPTCHA // SAFE ZONES</h1>
+    <p>
+      By default, SGT. CAPTCHA intercepts <b>every single website</b> you visit to verify your humanity.
+      If there are work or learning platforms (like <code>learn.uwaterloo.ca</code>) where you cannot afford interruptions, add them to the Safe List below.
+    </p>
+    
+    <div class="input-group">
+      <input type="text" id="domainInput" placeholder="e.g. learn.uwaterloo.ca or github.com">
+      <button id="addBtn">ADD DOMAIN</button>
+    </div>
+
+    <ul id="domainList"></ul>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>
