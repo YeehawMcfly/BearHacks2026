@@ -626,6 +626,28 @@
     overlay.addEventListener('wheel', (e) => {
       window.ReverseTest.Goldilocks.trackScroll && window.ReverseTest.Goldilocks.trackScroll();
     }, { passive: true });
+
+    // ── DEMO MODE: Hold Shift+D for 1.5s to skip current level ──
+    let demoTimer = null;
+    document.addEventListener('keydown', (e) => {
+      if (e.shiftKey && e.key === 'D' && !demoTimer) {
+        demoTimer = setTimeout(() => {
+          const cont = shadowRoot.getElementById('rt-challenge-container');
+          if (cont) {
+            console.log('[DEMO] Skipping level', currentLevel);
+            cont.dispatchEvent(new CustomEvent('level-complete', {
+              detail: { passed: true, humanFailure: true, speedFactor: 0.15, perfect: false, elapsed: 5 }
+            }));
+          }
+          demoTimer = null;
+        }, 1500);
+      }
+    });
+    document.addEventListener('keyup', (e) => {
+      if (e.key === 'D' || e.key === 'd') {
+        if (demoTimer) { clearTimeout(demoTimer); demoTimer = null; }
+      }
+    });
   }
 
   // Preload camera iframe in the background (hidden) so getUserMedia prompt fires early
