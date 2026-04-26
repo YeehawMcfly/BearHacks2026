@@ -117,6 +117,14 @@ function modelPath(filename) {
   return new URL(`assets/models/${filename}`, location.href).href;
 }
 
+/** Uninitialized canvas per task — required for WebGL2 / GPU delegate (see VisionTaskOptions.canvas). */
+function createGpuBindingCanvas() {
+  const c = document.createElement('canvas');
+  c.width = 1;
+  c.height = 1;
+  return c;
+}
+
 async function initMediaPipe() {
   try {
     if (loadSubEl) loadSubEl.textContent = 'Loading MediaPipe vision bundle...';
@@ -129,26 +137,45 @@ async function initMediaPipe() {
     const wasmDir = new URL('assets/models/', location.href).href;
     const fileset = await FilesetResolver.forVisionTasks(wasmDir);
 
-    // GestureRecognizer — handles hand gesture classification
-    if (loadSubEl) loadSubEl.textContent = 'Loading GestureRecognizer...';
-    gestureRecognizer = await GestureRecognizer.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: modelPath('gesture_recognizer.task'), delegate: 'GPU' },
-      runningMode: 'VIDEO',
-      numHands: 2
-    });
+    const gestureCanvas = createGpuBindingCanvas();
+    const poseCanvas = createGpuBindingCanvas();
 
-    // PoseLandmarker — for full body poses
-    if (loadSubEl) loadSubEl.textContent = 'Loading PoseLandmarker...';
-    poseLandmarker = await PoseLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: modelPath('pose_landmarker_lite.task'), delegate: 'GPU' },
-      runningMode: 'VIDEO',
-      numPoses: 1
-    });
+    // GPU: delegate + dedicated canvas (each task owns a WebGL2 context). Without canvas, Tasks Vision falls back to CPU/XNNPACK.
+    if (loadSubEl) loadSubEl.textContent = 'Loading GestureRecognizer (GPU)...';
+    try {
+      gestureRecognizer = await GestureRecognizer.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: modelPath('gesture_recognizer.task'), delegate: 'GPU' },
+        runningMode: 'VIDEO',
+        numHands: 2,
+        canvas: gestureCanvas
+      });
+
+      if (loadSubEl) loadSubEl.textContent = 'Loading PoseLandmarker (GPU)...';
+      poseLandmarker = await PoseLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: modelPath('pose_landmarker_lite.task'), delegate: 'GPU' },
+        runningMode: 'VIDEO',
+        numPoses: 1,
+        canvas: poseCanvas
+      });
+      console.log('[camera] MediaPipe WebGL2 GPU: GestureRecognizer + PoseLandmarker');
+    } catch (gpuErr) {
+      console.warn('[camera] GPU (WebGL2) init failed, using CPU delegate:', gpuErr?.message || gpuErr);
+      gestureRecognizer = await GestureRecognizer.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: modelPath('gesture_recognizer.task'), delegate: 'CPU' },
+        runningMode: 'VIDEO',
+        numHands: 2
+      });
+      poseLandmarker = await PoseLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: modelPath('pose_landmarker_lite.task'), delegate: 'CPU' },
+        runningMode: 'VIDEO',
+        numPoses: 1
+      });
+      console.log('[camera] MediaPipe CPU fallback: GestureRecognizer + PoseLandmarker');
+    }
 
     mpDrawingUtils = new DrawingUtils(octx);
     useMediaPipe = true;
     if (loadSubEl) loadSubEl.textContent = '✅ MediaPipe ready — strict gesture verification';
-    console.log('[camera] MediaPipe loaded: GestureRecognizer + PoseLandmarker');
     return true;
   } catch (err) {
     console.warn('[camera] MediaPipe failed:', err);

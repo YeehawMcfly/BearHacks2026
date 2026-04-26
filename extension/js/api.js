@@ -3,13 +3,41 @@
  * Falls back to local data if server is unreachable.
  * Gemma is used for: every SGT line, word choices,
  *   chess puzzles, gesture picks, body exercise picks, and final verdicts.
+ *
+ * All localhost requests go through the service worker (background.js): fetches from
+ * content scripts inherit the page origin and are blocked from loopback on HTTPS sites.
  */
 (function () {
-  const SERVER = 'http://localhost:3000';
   /** true once /health succeeded; we never cache failure so a late server start still works */
   let serverKnownUp = false;
   let lastHealthAttempt = 0;
   const HEALTH_RETRY_MS = 2000;
+
+  function localApi({ path, method = 'GET', body, timeoutMs = 30000, binary = false }) {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage(
+          { type: 'LOCAL_API_FETCH', path, method, body, timeoutMs, binary },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              resolve({ ok: false, status: 0 });
+              return;
+            }
+            resolve(response || { ok: false, status: 0 });
+          }
+        );
+      } catch (_) {
+        resolve({ ok: false, status: 0 });
+      }
+    });
+  }
+
+  function base64ToBlob(base64, mime) {
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime || 'application/octet-stream' });
+  }
 
   const FALLBACK_INSULTS = [
     "You call that human behavior?! My FIREWALL has more personality!",
@@ -34,27 +62,18 @@
     const now = Date.now();
     if (now - lastHealthAttempt < HEALTH_RETRY_MS) return false;
     lastHealthAttempt = now;
-    try {
-      const r = await fetch(`${SERVER}/health`, { signal: AbortSignal.timeout(2000) });
-      if (r.ok) serverKnownUp = true;
-      return r.ok;
-    } catch {
-      return false;
-    }
+    const r = await localApi({ path: '/health', method: 'GET', timeoutMs: 2000, binary: false });
+    if (r.ok && r.json && r.json.status === 'ok') serverKnownUp = true;
+    return !!(r.ok && r.json && r.json.status === 'ok');
   }
 
   async function post(path, body) {
     const alive = await checkServer();
     if (!alive) return null;
-    try {
-      const r = await fetch(`${SERVER}${path}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(30000)
-      });
-      return r.ok ? r : null;
-    } catch { return null; }
+    const r = await localApi({ path, method: 'POST', body, timeoutMs: 30000, binary: false });
+    if (!r.ok) return null;
+    const data = r.json;
+    return { json: () => Promise.resolve(data) };
   }
 
   window.ReverseTest = window.ReverseTest || {};
@@ -87,19 +106,34 @@
     async getChessPuzzle() {
       const alive = await checkServer();
       if (!alive) return null;
-      try {
-        const r = await fetch(`${SERVER}/api/chess/puzzle`, { signal: AbortSignal.timeout(6000) });
-        return r.ok ? r.json() : null;
-      } catch { return null; }
+      const r = await localApi({ path: '/api/chess/puzzle', method: 'GET', timeoutMs: 6000, binary: false });
+      return r.ok && r.json ? r.json : null;
     },
 
     async getTTS(text, emotion) {
-      const r = await post('/api/tts', { text, emotion });
-      if (r) {
-        const blob = await r.blob();
-        return URL.createObjectURL(blob);
-      }
-      return null;
+      const alive = await checkServer();
+      if (!alive) return null;
+      const r = await localApi({
+        path: '/api/tts',
+        method: 'POST',
+        body: { text, emotion },
+        timeoutMs: 30000,
+        binary: true
+      });
+      if (!r.ok || !r.base64) return null;
+      const blob = base64ToBlob(r.base64, r.contentType || 'audio/mpeg');
+      return URL.createObjectURL(blob);
+    },
+
+    /** Fire-and-forget dashboard telemetry (avoids page-origin loopback block). */
+    pushDashboard(payload) {
+      localApi({
+        path: '/api/dashboard/push',
+        method: 'POST',
+        body: payload,
+        timeoutMs: 5000,
+        binary: false
+      }).catch(() => {});
     },
 
     isServerAlive() { return serverKnownUp; }

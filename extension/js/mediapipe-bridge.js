@@ -36,18 +36,40 @@
 
     const wasmFileset = await FilesetResolver.forVisionTasks(WASM_PATH);
 
-    // Create both landmarkers
-    poseLandmarker = await PoseLandmarker.createFromOptions(wasmFileset, {
-      baseOptions: { modelAssetPath: POSE_MODEL, delegate: 'GPU' },
-      runningMode: 'VIDEO',
-      numPoses: 1
-    });
+    const poseCanvas = document.createElement('canvas');
+    poseCanvas.width = 1;
+    poseCanvas.height = 1;
+    const handCanvas = document.createElement('canvas');
+    handCanvas.width = 1;
+    handCanvas.height = 1;
 
-    handLandmarker = await HandLandmarker.createFromOptions(wasmFileset, {
-      baseOptions: { modelAssetPath: HAND_MODEL, delegate: 'GPU' },
-      runningMode: 'VIDEO',
-      numHands: 2
-    });
+    try {
+      poseLandmarker = await PoseLandmarker.createFromOptions(wasmFileset, {
+        baseOptions: { modelAssetPath: POSE_MODEL, delegate: 'GPU' },
+        runningMode: 'VIDEO',
+        numPoses: 1,
+        canvas: poseCanvas
+      });
+      handLandmarker = await HandLandmarker.createFromOptions(wasmFileset, {
+        baseOptions: { modelAssetPath: HAND_MODEL, delegate: 'GPU' },
+        runningMode: 'VIDEO',
+        numHands: 2,
+        canvas: handCanvas
+      });
+      console.log('[mediapipe-bridge] WebGL2 GPU: PoseLandmarker + HandLandmarker');
+    } catch (gpuErr) {
+      console.warn('[mediapipe-bridge] GPU init failed, CPU fallback:', gpuErr?.message || gpuErr);
+      poseLandmarker = await PoseLandmarker.createFromOptions(wasmFileset, {
+        baseOptions: { modelAssetPath: POSE_MODEL, delegate: 'CPU' },
+        runningMode: 'VIDEO',
+        numPoses: 1
+      });
+      handLandmarker = await HandLandmarker.createFromOptions(wasmFileset, {
+        baseOptions: { modelAssetPath: HAND_MODEL, delegate: 'CPU' },
+        runningMode: 'VIDEO',
+        numHands: 2
+      });
+    }
 
     send('mp-ready', { ready: true });
   } catch (err) {
