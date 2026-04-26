@@ -78,14 +78,9 @@
   let overlayEl = null;
   let currentTheme = 'normal'; // 'normal' or 'military'
 
-  // Helper to push events to the live dashboard
+  // Helper to push events to the live dashboard (proxied via service worker — no loopback from page origin)
   function pushDashboardEvent(msg, type = 'system') {
-    fetch('http://localhost:3000/api/dashboard/push', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event: msg, type }),
-      signal: AbortSignal.timeout(1000)
-    }).catch(() => {});
+    window.ReverseTest.API.pushDashboard({ event: msg, type });
   }
 
   function buildOverlayHTML() {

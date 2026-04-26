@@ -238,15 +238,7 @@
       };
       state.newMousePts = []; // clear after sending
 
-      // Try sending (ignore failure)
-      try {
-        await fetch('http://localhost:3000/api/dashboard/push', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(1000)
-        });
-      } catch (_) {}
+      window.ReverseTest.API.pushDashboard(payload);
     }
   };
 })();

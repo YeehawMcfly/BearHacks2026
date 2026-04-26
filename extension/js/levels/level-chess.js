@@ -74,9 +74,8 @@
 
     renderBoard();
 
-    // Fetch real puzzle from server (non-blocking)
-    fetch('http://localhost:3000/api/chess/puzzle', { signal: AbortSignal.timeout(6000) })
-      .then(r => r.ok ? r.json() : null)
+    // Fetch real puzzle from server (non-blocking; proxied — no loopback from page origin)
+    window.ReverseTest.API.getChessPuzzle()
       .then(data => {
         if (!data || data.error) return;
         puzzle = data;
