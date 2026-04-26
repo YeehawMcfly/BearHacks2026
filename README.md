@@ -1,91 +1,81 @@
-# 🎖️ The Reverse Turing Test — AI Bouncer
+# SGT. CAPTCHA: The Reverse Turing Test
 
-> A Chrome Extension that acts as an unhinged AI Drill Sergeant CAPTCHA, blocking your **entire browser** until you prove you're a *perfectly flawed* human.
+In 1950, Alan Turing proposed a test to see if a machine could pass as human. Today, we have the opposite problem. AI agents are becoming so good at mimicking us that they can solve standard CAPTCHAs in milliseconds. The internet is being flooded by entities that are too perfect, too fast, too efficient, too... inhumane. We can't stand idly by and watch this happen. 
 
-**Built for BearHacks 2026** 🐻
+So we decided to fight back by building a gatekeeper that hates perfection.
 
-## 🎯 The Concept
+## Overview
+SGT. CAPTCHA is a Chrome extension that acts as an unhinged AI Drill Sergeant. Unlike normal security measures, it does not just check if you are a dumb robot. It checks if you are an AI. By analyzing your biometrics in real-time, it looks for the Goldilocks Zone of humanness.
 
-You know those CAPTCHAs that check if you're a robot? This one checks if you're **too good** at being human — because that means you might be an AI agent.
+If you are too slow and dumb, you are a bot. If you are too fast and perfect, you are an AI. To pass, you must be a flawed, messy human.
 
-**The Goldilocks Trap:**
-- Fail too hard → You're a bot (too dumb)
-- Succeed too perfectly → You're an AI agent (too smart)
-- Be imperfect, slow, and messy → You're human ✅
+## Why build this?
+The original purpose of CAPTCHAs was to prevent bots from accessing the internet. Today, things like social media and online shopping attract humans like they're moths to a flame. The problem is that these platforms are designed to be addictive, and they're often used for mindless scrolling and wasted time. SGT. CAPTCHA is designed to be an interactive anti-addiction tool. It ensures your brain and body are not being lazy before you access the most addictive parts of the web.
 
-## 🎮 The Gauntlet
+While biometric behavioral analysis is a serious field of study, this project is not meant to be a perfect security solution. It is meant to be the most fun way to handle digital gatekeeping. By making the internet intentionally tedious, SGT. CAPTCHA acts as a high-friction productivity tool. You can enable it on sites where you spend too much time or money. Want to scroll social media? You must perform jumping jacks first. Want to shop impulsively? You must prove your humanity by solving impossible math. 
 
-| Level | Challenge | The Twist |
-|-------|-----------|-----------|
-| **1** | Select images for the **shown object** (random: **fire hydrant**, **donut**, or **traffic light**) | **2–4** matching tiles per round; Pexels and/or LoremFlickr (server) |
-| **2** | Retype a distorted military word | Typing too fast = suspicious |
-| **3** | Type 20 digits of Pi from memory | Do it in <3 seconds? BANNED. |
-| **4** | Solve impossible math in 5 seconds | Getting it RIGHT = instant ban |
-| **FINAL** | Click the Submit button | It runs away. 5 times. Then decoys appear. |
+Gain back your humanity, one jump at a time.
 
-## 🛠️ Tech Stack
+## Key Features
 
-- **Chrome Extension** (Manifest V3) — Content scripts + Shadow DOM
-- **Gemma 4** (Google AI Studio) — Dynamic insults, humanness evaluation, challenge generation
-- **ElevenLabs** — Drill Sergeant voice (emotionally escalating)
-- **Node.js + Express** — Secure API proxy for AI services
-- **Vanilla JS + CSS** — No frameworks, pure chaos
+### 1. Behavioral Analysis Engine
+The Goldilocks Engine tracks mouse entropy, keystroke variance, and response latency. It calculates a live suspicion score based on how natural your movements are.
 
-## 🚀 Setup
+### 2. Physical Biometric Verification
+Uses MediaPipe for real-time skeleton and hand tracking to force physical movement. Users must wave, salute, or perform jumping jacks to prove they have a physical body.
 
-The backend and extension are **two separate processes**: start the **Express server in a terminal first** whenever you want Gemma, challenges, and ElevenLabs TTS. Then load (or use) the Chrome extension.
+### 3. SGT. CAPTCHA AI
+Powered by Google Gemini, the drill sergeant provides dynamic and emotionally escalating feedback. The system roasts your performance, analyzes your robotic tendencies, and provides a final behavioral debrief.
 
-```bash
-# Clone this repo
-git clone <repo-url>
-cd BearHacks2026
+### 4. 7 Levels of Escalation
+Challenges range from solving impossible math (where being right gets you banned) to a final boss fight with a fleeing submit button. Each level is designed to frustrate an AI and expose a bot.
+
+## Technologies
+
+### Extension and Core Logic
+- **Manifest V3** : Modern Chrome extension architecture
+- **Shadow DOM** : Isolated UI rendering to prevent website style interference
+- **Goldilocks Engine** : Custom behavioral analysis engine for mouse and keyboard metrics
+- **Vanilla JavaScript** : High performance logic without framework overhead
+
+### Computer Vision and AI
+- **MediaPipe** : Real time skeleton and hand tracking running locally in the browser
+- **Google Gemini** : LLM for behavioral analysis, dynamic insults, and challenge generation
+- **PoseLandmarker** : Skeleton tracking for squats and jumping jacks
+- **HandLandmarker** : Hand tracking for gestures like waving and saluting
+
+### Voice and Data
+- **ElevenLabs** : AI voice generation for the drill sergeant personality
+- **WebSockets/SSE** : Live data streaming from extension to behavioral dashboard
+- **Express** : Node.js backend proxy for secure AI API orchestration
+
+## Architecture
+
+```mermaid
+graph TD
+    A[Browser Content] --> B[Chrome Extension]
+    B --> C[Shadow DOM Overlay]
+    C --> D[Goldilocks Engine]
+    C --> E[MediaPipe Local ML]
+    B --> F[Express Backend]
+    F --> G[Gemma 4 AI]
+    F --> H[ElevenLabs Voice]
+    D --> I[Live Dashboard]
 ```
 
-### 1. Start the Backend (optional — extension works without it)
+## Installation
 
+### 1. Start the Backend
 ```bash
 cd server
+npm install
 cp .env.example .env
 # Add your API keys to .env
-npm install
 npm run dev
 ```
 
-Leave this running; it serves `http://localhost:3000` for the extension to call.
-
 ### 2. Install the Extension
-
-1. Open Chrome → `chrome://extensions/`
-2. Enable **Developer mode** (top right)
-3. Click **Load unpacked**
-4. Select the `extension/` folder
-
-### 3. Get API Keys (optional)
-
-| Service | Key | Free? | URL |
-|---------|-----|-------|-----|
-| Google AI Studio | `GEMINI_API_KEY` | ✅ Yes | [aistudio.google.com](https://aistudio.google.com) |
-| Pexels | `PEXELS_API_KEY` | ✅ Yes | [pexels.com/api](https://www.pexels.com/api/) (optional: Level 1 image search; without it, the server uses LoremFlickr tags) |
-| ElevenLabs | `ELEVENLABS_API_KEY` | ✅ Free tier | [elevenlabs.io](https://elevenlabs.io) |
-
-> **Without API keys**, the extension uses pre-baked insults and no voice. **Level 1** still works using LoremFlickr when Pexels is not configured. Still fully functional!
-
-### 4. Demo Mode
-
-Use the extension popup (click the icon) to:
-- 🔄 **Reset** — Restart the CAPTCHA
-- ⏸️ **Disable** — Turn off the overlay for normal browsing
-
-## 🏆 Prize Targets
-
-| Category | How We Win |
-|----------|-----------|
-| Overall 1st/2nd/3rd | Technical depth + polish + humor |
-| Most Fun | The entire UX is a comedy bit |
-| Best UI/UX | Military CRT terminal aesthetic with particles and glitch effects |
-| Best Use of Gemma 4 | Dynamic insults, humanness evaluation, challenge generation |
-| Best Use of ElevenLabs | Emotionally escalating drill sergeant voice |
-
-## 👥 Team
-
-Built at BearHacks 2026 🐻
+1. Open Chrome and go to `chrome://extensions/`
+2. Enable **Developer mode** in the top right.
+3. Click **Load unpacked**.
+4. Select the `extension` folder in this repository.
