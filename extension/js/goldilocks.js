@@ -187,8 +187,8 @@
     },
 
     getScore() { return state.suspicionScore; },
-    setScore(s) { state.suspicionScore = Math.max(0, Math.min(100, s)); },
-    addSuspicion(n) { state.suspicionScore = Math.max(0, Math.min(100, state.suspicionScore + n)); },
+    setScore(s) { state.suspicionScore = Math.max(0, Math.min(100, s)); this.queueBroadcast(); },
+    addSuspicion(n) { state.suspicionScore = Math.max(0, Math.min(100, state.suspicionScore + n)); this.queueBroadcast(); },
 
     // Expose internals for level modules
     get _levelStart() { return state.levelStartTime; },

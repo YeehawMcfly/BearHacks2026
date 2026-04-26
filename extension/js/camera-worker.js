@@ -245,7 +245,7 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
     for (const gestureList of recognizedGestures) {
       for (const detected of gestureList) {
         // Only accept high-confidence classifications
-        if (detected.score < 0.75) continue; // Raised from 0.65 — stricter classification
+        if (detected.score < 0.60) continue; // Lowered to 0.60 for Thumbs Up and general leniency
         if (expectedCategories.includes(detected.categoryName)) {
           // For WAVE: additionally require lateral oscillation + raised hand
           if (g.includes('WAVE') || g.includes('HAND')) {
@@ -269,9 +269,10 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
       if (clapState === 'together' && wristDist > 0.18) {
         clapCycles++;
         clapState = 'apart';
-        console.log(`[CLAP] Cycle ${clapCycles}/${CLAP_REQUIRED_CYCLES}`);
+        accumulated = (clapCycles / CLAP_REQUIRED_CYCLES) * REQUIRED;
+        framesSinceLastMatch = 0; // prevent decay
       }
-      return clapCycles >= CLAP_REQUIRED_CYCLES ? 1.0 : 0;
+      return clapCycles >= CLAP_REQUIRED_CYCLES ? 1.0 : (clapState === 'together' ? 1.0 : 0);
     }
     return 0;
   }
@@ -340,10 +341,10 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
       if (armsDown && jjArmsWereUp) {
         jjCycles++;
         jjArmsWereUp = false;
-        console.log(`[JJ] Cycle ${jjCycles}/3`);
+        accumulated = (jjCycles / 3) * REQUIRED;
+        framesSinceLastMatch = 0;
       }
-      // Return match during the "up" phase of cycle so progress ring fills while performing
-      return (jjCycles >= 3 || (jjArmsWereUp && jjCycles >= 2)) ? 1.0 : (armsUp ? 1.0 : 0);
+      return jjCycles >= 3 ? 1.0 : (armsUp ? 1.0 : 0);
     }
     return 0;
   }
@@ -361,10 +362,10 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
       if (squatPhase === 'squatting' && isStanding) {
         squatCycles++;
         squatPhase = 'standing';
-        console.log(`[SQUAT] Cycle ${squatCycles}/${SQUAT_REQUIRED_CYCLES}`);
+        accumulated = (squatCycles / SQUAT_REQUIRED_CYCLES) * REQUIRED;
+        framesSinceLastMatch = 0;
       }
-      // Match during squat phase so progress ring fills while performing
-      return (squatCycles >= SQUAT_REQUIRED_CYCLES) ? 1.0 : (isSquatting ? 1.0 : 0);
+      return squatCycles >= SQUAT_REQUIRED_CYCLES ? 1.0 : (isSquatting ? 1.0 : 0);
     }
     return 0;
   }
@@ -394,13 +395,14 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
           if (circleQuadrantsHit.size >= 4) {
             circleRevolutions++;
             circleQuadrantsHit.clear();
-            console.log(`[CIRCLE] Revolution ${circleRevolutions} completed`);
+            
+            // Explicitly update progress
+            accumulated = (circleRevolutions / 5) * REQUIRED;
+            framesSinceLastMatch = 0; // prevent decay
           }
         }
 
-        if (circleRevolutions >= 2) return 1.0;
-        if (circleRevolutions >= 1 && circleQuadrantsHit.size >= 2) return 1.0;
-        return 0;
+        return circleRevolutions >= 5 ? 1.0 : 0;
       }
       return 0;
     }
@@ -408,7 +410,6 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
   }
 
   // ── MARCH: High knee hold logic ──
-  // Check if either knee is lifted significantly higher than the other leg
   if (g.includes('MARCH')) {
     if (pl) {
       const lKnee = pl[25], rKnee = pl[26];
@@ -419,7 +420,19 @@ function evaluateGesture(gesture, gestureResult, poseResult) {
       const leftLifted = lHipToKnee < rHipToKnee - 0.05;
       const rightLifted = rHipToKnee < lHipToKnee - 0.05;
 
-      return (leftLifted || rightLifted) ? 1.0 : 0;
+      if (leftLifted && marchLastLegUp !== 'left') {
+        marchLastLegUp = 'left';
+        marchSteps++;
+        accumulated = (marchSteps / MARCH_REQUIRED_STEPS) * REQUIRED;
+        framesSinceLastMatch = 0;
+      } else if (rightLifted && marchLastLegUp !== 'right') {
+        marchLastLegUp = 'right';
+        marchSteps++;
+        accumulated = (marchSteps / MARCH_REQUIRED_STEPS) * REQUIRED;
+        framesSinceLastMatch = 0;
+      }
+
+      return marchSteps >= MARCH_REQUIRED_STEPS ? 1.0 : ((leftLifted || rightLifted) ? 1.0 : 0);
     }
     return 0;
   }
@@ -650,18 +663,18 @@ function loop() {
   // - Need 3 consecutive matching frames before accumulating (debounce)
   // - Grace period: no decay for 10 frames after last match (covers cycle gaps)
   // - Decay: -0.2/frame after grace period expires
+  const isCycleBased = GESTURE.includes('JUMPING') || GESTURE.includes('JACK') || GESTURE.includes('SQUAT') || GESTURE.includes('CLAP') || GESTURE.includes('ARM') || GESTURE.includes('HELICOPTER') || GESTURE.includes('CIRCLE') || GESTURE.includes('MARCH');
+
   if (score >= 1.0) {
     consecutiveMatches++;
     framesSinceLastMatch = 0;
-    if (consecutiveMatches >= MIN_CONSECUTIVE) {
+    if (consecutiveMatches >= MIN_CONSECUTIVE && !isCycleBased) {
       accumulated += 1.0;
     }
   } else {
     consecutiveMatches = 0;
     framesSinceLastMatch++;
-    // Only decay AFTER grace period — allows for natural cycle gaps
-    // (e.g., arms coming down between jumping jacks)
-    if (framesSinceLastMatch > GRACE_PERIOD) {
+    if (framesSinceLastMatch > GRACE_PERIOD && !isCycleBased) {
       accumulated = Math.max(0, accumulated - 0.2);
     }
   }

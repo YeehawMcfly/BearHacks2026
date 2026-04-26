@@ -5,8 +5,9 @@
  */
 (function () {
   const GESTURES = [
-    { name: 'WAVE YOUR HAND', instruction: 'WAVE at the camera!', emoji: '👋', hint: 'Raise your hand and wave side to side' },
     { name: 'THUMBS UP', instruction: 'Give me a THUMBS UP!', emoji: '👍', hint: 'Hold a clear thumbs up to the camera' },
+    { name: 'POINTING UP', instruction: 'POINT UP to the sky!', emoji: '☝️', hint: 'Point your index finger straight up' },
+    { name: 'VICTORY POSE', instruction: 'Show me the PEACE/VICTORY sign!', emoji: '✌️', hint: 'Hold up two fingers (peace sign)' },
     { name: 'NOD YOUR HEAD', instruction: 'NOD YOUR HEAD!', emoji: '🫡', hint: 'Move your head up and down' },
     { name: 'GIVE A SALUTE', instruction: 'SALUTE!', emoji: '🫡', hint: 'Raise your hand to your forehead' },
     { name: 'SHAKE YOUR HEAD', instruction: 'SHAKE YOUR HEAD!', emoji: '🙅', hint: 'Turn your head left and right' }
