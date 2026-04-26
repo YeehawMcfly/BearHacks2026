@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Camera Testing Harness</title>
+  <style>
+    body {
+      background: #050a11;
+      color: #0ff;
+      font-family: monospace;
+      margin: 0; padding: 20px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .controls {
+      margin-bottom: 20px;
+      display: flex; gap: 10px; align-items: center;
+    }
+    select, button {
+      background: rgba(6,182,212,0.1);
+      color: #0ff;
+      border: 1px solid #06b6d4;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover { background: rgba(6,182,212,0.3); }
+    .camera-box {
+      width: 640px; height: 480px;
+      border: 2px solid #06b6d4;
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+    iframe { width: 100%; height: 100%; border: none; }
+    .log-box {
+      margin-top: 20px;
+      width: 640px; height: 150px;
+      background: #000;
+      border: 1px solid #333;
+      padding: 10px;
+      overflow-y: auto;
+      font-size: 12px;
+      color: #10b981;
+    }
+  </style>
+</head>
+<body>
+  <h1>BIOMETRIC SENSOR DIAGNOSTICS</h1>
+  
+  <div class="controls">
+    <select id="gestureSelect">
+      <option value="THUMBS UP">THUMBS UP</option>
+      <option value="POINTING UP">POINTING UP</option>
+      <option value="VICTORY POSE">VICTORY POSE</option>
+      <option value="SQUAT">SQUAT</option>
+      <option value="JUMPING JACKS">JUMPING JACKS</option>
+      <option value="MARCH IN PLACE">MARCH IN PLACE</option>
+      <option value="ARM CIRCLES">ARM CIRCLES</option>
+      <option value="SALUTE">SALUTE</option>
+      <option value="NOD YOUR HEAD">NOD YOUR HEAD</option>
+    </select>
+    <button id="startBtn">START TEST</button>
+  </div>
+
+  <div class="camera-box">
+    <iframe id="cameraIframe" allow="camera"></iframe>
+  </div>
+
+  <div class="log-box" id="logBox"></div>
+
+  <script src="test-camera.js"></script>
+</body>
+</html>

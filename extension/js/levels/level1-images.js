@@ -1,108 +1,121 @@
 /**
- * Level 1 — Image Grid CAPTCHA
- * "Select all images containing [ABSURD CATEGORY]"
- * Uses procedural canvas art. The category is intentionally absurd.
- * Goldilocks tracks click patterns and timing.
+ * Level 1 — Image grid CAPTCHA (reCAPTCHA-style)
+ * Primary: POST /api/ai/level1-captcha (Pexels + LoremFlickr on server).
+ * Fallback: LoremFlickr-only when server unreachable (topic list mirrors server/level1Topics.mjs).
  */
 (function () {
-  const CATEGORIES = [
-    { label: 'FREEDOM', colors: ['#1a3a5c','#c0392b','#f0e68c','#2e8b57','#6a5acd','#ff6347','#20b2aa','#daa520','#8b4513'] },
-    { label: 'EXISTENTIAL DREAD', colors: ['#1a1a2e','#16213e','#0f3460','#533483','#2c2c54','#2f1b41','#0a0a23','#1b1b2f','#12121f'] },
-    { label: 'SUSPICIOUS ACTIVITY', colors: ['#2d3436','#636e72','#b2bec3','#dfe6e9','#ff7675','#fd79a8','#a29bfe','#6c5ce7','#ffeaa7'] },
-    { label: 'IMAGES A BOT WOULD PICK', colors: ['#00b894','#00cec9','#0984e3','#6c5ce7','#fdcb6e','#e17055','#d63031','#e84393','#2d3436'] },
-    { label: 'PURE CHAOS', colors: ['#ff0000','#ff8800','#ffff00','#00ff00','#00ffff','#0000ff','#ff00ff','#ff0088','#88ff00'] }
+  /** Aligned with server/level1Topics.mjs */
+  const L1_OFFLINE_TOPICS = [
+    { id: 'hydrant', label: 'a fire hydrant', loremTag: 'fire,hydrant' },
+    { id: 'donut', label: 'a donut', loremTag: 'doughnut,glazed' },
+    { id: 'traffic_light', label: 'a traffic light', loremTag: 'stoplight,signal' }
+  ];
+  const OFFLINE_NEG_TAGS = [
+    'shark,underwater', 'penguin,ice', 'volcano,lava', 'galaxy,space', 'desert,landscape', 'eagle,mountain', 'medusa,ocean'
   ];
 
   let selectedCells = new Set();
   let correctCells = new Set();
-  let category = null;
+  let line1Text = 'Select all images that contain';
+  let categoryLabel = '';
   let container = null;
-  let shadowRoot = null;
 
-  function drawProceduralImage(canvas, colorPalette, index) {
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width = 200;
-    const h = canvas.height = 200;
-    const seed = index * 137 + Math.floor(Math.random() * 100);
-
-    // Background
-    ctx.fillStyle = colorPalette[index % colorPalette.length];
-    ctx.fillRect(0, 0, w, h);
-
-    // Random shapes
-    const rand = (n) => ((seed * (n + 1) * 9301 + 49297) % 233280) / 233280;
-    const shapeCount = 3 + Math.floor(rand(0) * 5);
-
-    for (let i = 0; i < shapeCount; i++) {
-      ctx.fillStyle = colorPalette[(index + i + 1) % colorPalette.length];
-      ctx.globalAlpha = 0.3 + rand(i * 3) * 0.5;
-      const shape = Math.floor(rand(i * 7) * 3);
-
-      if (shape === 0) { // Circle
-        ctx.beginPath();
-        ctx.arc(rand(i*2)*w, rand(i*2+1)*h, 15+rand(i*5)*50, 0, Math.PI*2);
-        ctx.fill();
-      } else if (shape === 1) { // Rectangle
-        ctx.fillRect(rand(i*3)*w, rand(i*3+1)*h, 20+rand(i*4)*80, 20+rand(i*4+1)*80);
-      } else { // Triangle
-        ctx.beginPath();
-        ctx.moveTo(rand(i*5)*w, rand(i*5+1)*h);
-        ctx.lineTo(rand(i*5+2)*w, rand(i*5+3)*h);
-        ctx.lineTo(rand(i*5+4)*w, rand(i*5+5)*h);
-        ctx.closePath(); ctx.fill();
-      }
-    }
-
-    // Noise overlay
-    ctx.globalAlpha = 0.08;
-    for (let y = 0; y < h; y += 4) {
-      for (let x = 0; x < w; x += 4) {
-        if (Math.random() > 0.5) {
-          ctx.fillStyle = Math.random() > 0.5 ? '#fff' : '#000';
-          ctx.fillRect(x, y, 4, 4);
-        }
-      }
-    }
-    ctx.globalAlpha = 1;
+  function loremFlickrUrl(tagComma, lock) {
+    return `https://loremflickr.com/280/280/${tagComma}?lock=${lock}`;
   }
 
-  function render(shadow, cont) {
-    shadowRoot = shadow;
-    container = cont;
-    selectedCells.clear();
-
-    // Pick random category
-    category = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-    // 3-4 cells are "correct" (randomly)
-    correctCells.clear();
-    const correctCount = 3 + Math.floor(Math.random() * 2);
-    while (correctCells.size < correctCount) {
-      correctCells.add(Math.floor(Math.random() * 9));
+  function shuffleInPlace(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = a[i];
+      a[i] = a[j];
+      a[j] = t;
     }
+    return a;
+  }
 
-    container.innerHTML = `
-      <div class="rt-challenge-title">LEVEL 1 — VISUAL IDENTIFICATION</div>
-      <div class="rt-challenge-subtitle">Select all images containing <strong style="color:var(--accent-amber)">${category.label}</strong></div>
-      <div class="rt-challenge-content">
-        <div class="rt-image-grid" id="rt-grid"></div>
-        <div class="text-center mt-16">
-          <button class="rt-submit-btn" id="rt-l1-submit">VERIFY SELECTION</button>
+  /** Same topic pool + layout as server/level1Remote.mjs when API is unavailable. */
+  function buildOfflineChallenge() {
+    const topic = L1_OFFLINE_TOPICS[Math.floor(Math.random() * L1_OFFLINE_TOPICS.length)];
+    const kPos = 2 + Math.floor(Math.random() * 3);
+    const nNeg = 9 - kPos;
+    const lock0 = (Date.now() % 200000) + Math.floor(Math.random() * 1000);
+    const posUrls = [];
+    for (let p = 0; p < kPos; p++) {
+      posUrls.push(loremFlickrUrl(topic.loremTag, lock0 + p * 17));
+    }
+    const negUrls = [];
+    for (let q = 0; q < nNeg; q++) {
+      const tag = OFFLINE_NEG_TAGS[q % OFFLINE_NEG_TAGS.length];
+      negUrls.push(loremFlickrUrl(tag, lock0 + 500 + q * 19));
+    }
+    const tiles = [
+      ...posUrls.map((url) => ({ url, isPositive: true })),
+      ...negUrls.map((url) => ({ url, isPositive: false }))
+    ];
+    shuffleInPlace(tiles);
+    const imageUrls = tiles.map((t) => t.url);
+    const correctIndices = [];
+    for (let i = 0; i < tiles.length; i++) {
+      if (tiles[i].isPositive) correctIndices.push(i);
+    }
+    return {
+      missionId: topic.id,
+      label: topic.label,
+      line1: 'Select all images that contain',
+      imageUrls,
+      correctIndices
+    };
+  }
+
+  function buildHtml(count) {
+    const cells = Array.from({ length: count }, (_, i) => i)
+      .map(
+        (i) => `
+            <div class="rt-l1-cell" data-index="${i}">
+              <div class="rt-l1-shimmer" id="rt-l1-shimmer-${i}"></div>
+              <img id="rt-l1-img-${i}" alt="captcha image" style="opacity:0;transition:opacity 0.3s;" />
+              <div class="rt-l1-check">✓</div>
+            </div>
+          `
+      )
+      .join('');
+    return `
+      <div class="rt-l1-normal-wrap">
+        <div class="rt-l1-header">
+          <div class="rt-l1-header-text">
+            <span id="rt-l1-line1"></span><br>
+            <strong id="rt-l1-category"></strong>
+          </div>
+          <div class="rt-l1-header-icon">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#fff" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+            </svg>
+          </div>
+        </div>
+        <div class="rt-l1-grid" id="rt-l1-grid">
+          ${cells}
+        </div>
+        <div class="rt-l1-footer">
+          <button class="rt-l1-verify-btn" id="rt-l1-submit">VERIFY</button>
         </div>
       </div>
     `;
+  }
 
-    const grid = shadow.getElementById('rt-grid');
-    for (let i = 0; i < 9; i++) {
-      const cell = document.createElement('div');
-      cell.className = 'rt-image-cell';
-      cell.dataset.index = i;
+  function wireLine1Label(shadow, line1, label) {
+    const l1 = shadow.getElementById('rt-l1-line1');
+    const cat = shadow.getElementById('rt-l1-category');
+    if (l1) l1.textContent = line1;
+    if (cat) cat.textContent = label;
+  }
 
-      const canvas = document.createElement('canvas');
-      drawProceduralImage(canvas, category.colors, i);
-      cell.appendChild(canvas);
-
+  function bindCells(shadow) {
+    const cells = shadow.querySelectorAll('.rt-l1-cell');
+    cells.forEach((cell) => {
       cell.addEventListener('click', () => {
-        const idx = parseInt(cell.dataset.index);
+        const idx = parseInt(cell.dataset.index, 10);
         if (selectedCells.has(idx)) {
           selectedCells.delete(idx);
           cell.classList.remove('selected');
@@ -115,37 +128,96 @@
           cell.getBoundingClientRect().x,
           cell.getBoundingClientRect().y
         );
-        window.ReverseTest.Audio.sfx.click();
       });
-
-      grid.appendChild(cell);
-    }
-
-    shadow.getElementById('rt-l1-submit').addEventListener('click', () => {
-      if (selectedCells.size === 0) return;
-      const event = new CustomEvent('level-complete', { detail: validate() });
-      container.dispatchEvent(event);
     });
+  }
+
+  function loadRemoteImages(shadow, urls) {
+    urls.forEach((url, i) => {
+      const img = shadow.getElementById(`rt-l1-img-${i}`);
+      const shimmer = shadow.getElementById(`rt-l1-shimmer-${i}`);
+      if (!img) return;
+      try {
+        chrome.runtime.sendMessage({ type: 'FETCH_IMAGE', url }, (res) => {
+          if (res && res.dataUrl) {
+            img.src = res.dataUrl;
+            img.onload = () => {
+              img.style.opacity = '1';
+              if (shimmer) shimmer.style.display = 'none';
+            };
+          } else if (shimmer) {
+            shimmer.style.display = 'flex';
+            shimmer.style.alignItems = 'center';
+            shimmer.style.justifyContent = 'center';
+            shimmer.textContent = '?';
+          }
+        });
+      } catch (e) {
+        if (shimmer) shimmer.textContent = '?';
+      }
+    });
+  }
+
+  function render(shadow, cont) {
+    container = cont;
+    selectedCells.clear();
+    correctCells.clear();
+    line1Text = 'Select all images that contain';
+    categoryLabel = '';
+
+    cont.innerHTML = `
+      <div class="rt-l1-normal-wrap">
+        <div class="rt-l1-header-text" style="padding:24px;font-size:14px">Loading…</div>
+      </div>
+    `;
+
+    (async () => {
+      let data = await window.ReverseTest.API.getLevel1Captcha();
+      if (!data || !data.imageUrls || data.imageUrls.length !== 9) {
+        data = buildOfflineChallenge();
+      }
+      if (!data || !data.imageUrls || data.imageUrls.length !== 9) {
+        cont.innerHTML = '<div class="rt-l1-normal-wrap"><p>Could not load challenge.</p></div>';
+        return;
+      }
+
+      line1Text = data.line1 || line1Text;
+      categoryLabel = data.label || '';
+      correctCells = new Set(data.correctIndices || []);
+      cont.innerHTML = buildHtml(9);
+      wireLine1Label(shadow, line1Text, categoryLabel);
+      loadRemoteImages(shadow, data.imageUrls);
+      bindCells(shadow);
+
+      const submit = shadow.getElementById('rt-l1-submit');
+      if (submit) {
+        submit.addEventListener('click', () => {
+          if (selectedCells.size === 0) return;
+          container.dispatchEvent(new CustomEvent('level-complete', { detail: validate() }));
+        });
+      }
+    })();
   }
 
   function validate() {
     const elapsed = (performance.now() - window.ReverseTest.Goldilocks._levelStart) / 1000;
-    const speed = elapsed < 2 ? 1.0 : elapsed < 4 ? 0.8 : elapsed < 8 ? 0.4 : elapsed < 15 ? 0.2 : 0.05;
-    // We don't actually care about "correct" answers for absurd categories
-    // But we track if they picked the "correct" random set perfectly
-    const perfectMatch = selectedCells.size === correctCells.size &&
-      [...selectedCells].every(c => correctCells.has(c));
-
+    const speed = elapsed < 1.5 ? 1.0 : elapsed < 3 ? 0.7 : elapsed < 8 ? 0.3 : elapsed < 20 ? 0.1 : 0.05;
+    const sameSize = selectedCells.size === correctCells.size;
+    const everyMatch = sameSize && [...selectedCells].every((c) => correctCells.has(c));
     return {
-      passed: selectedCells.size >= 2 && selectedCells.size <= 6, // Accept any reasonable selection
+      passed: everyMatch,
       speedFactor: speed,
-      perfect: perfectMatch,
+      perfect: everyMatch && elapsed < 2,
       selected: [...selectedCells],
       elapsed
     };
   }
 
-  function cleanup() { selectedCells.clear(); container = null; }
+  function cleanup() {
+    selectedCells.clear();
+    correctCells.clear();
+    container = null;
+  }
 
   window.ReverseTest = window.ReverseTest || {};
   window.ReverseTest.Level1 = { render, validate, cleanup };

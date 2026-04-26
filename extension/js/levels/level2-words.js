@@ -86,7 +86,7 @@
     targetWord = WORDS[Math.floor(Math.random() * WORDS.length)];
 
     container.innerHTML = `
-      <div class="rt-challenge-title">LEVEL 2 — OPTICAL VERIFICATION</div>
+      <div class="rt-challenge-title">OPTICAL VERIFICATION</div>
       <div class="rt-challenge-subtitle">Type the distorted word exactly as shown</div>
       <div class="rt-challenge-content">
         <div class="rt-distorted-wrap">
@@ -116,8 +116,8 @@
         input.classList.add('error');
         window.ReverseTest.Audio.sfx.error();
         setTimeout(() => input.classList.remove('error'), 500);
-        // Give them another chance but add suspicion
-        window.ReverseTest.Goldilocks.addSuspicion(3);
+        // Give them another chance with minimal suspicion
+        window.ReverseTest.Goldilocks.addSuspicion(1);
         return;
       }
       container.dispatchEvent(new CustomEvent('level-complete', { detail: result }));
@@ -129,7 +129,8 @@
     const answer = (input?.value || '').trim().toUpperCase();
     const correct = answer === targetWord;
     const elapsed = (performance.now() - window.ReverseTest.Goldilocks._levelStart) / 1000;
-    const speed = elapsed < 1.5 ? 1.0 : elapsed < 4 ? 0.7 : elapsed < 10 ? 0.3 : 0.1;
+    // Only suspicious if typed impossibly fast (< 1.5s for a long word)
+    const speed = elapsed < 1.5 ? 1.0 : elapsed < 3 ? 0.6 : elapsed < 15 ? 0.15 : 0.1;
 
     return {
       passed: correct,

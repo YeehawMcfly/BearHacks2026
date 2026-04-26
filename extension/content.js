@@ -6,15 +6,32 @@
   // Don't run on extension pages or chrome:// URLs
   if (window.location.protocol === 'chrome-extension:' || window.location.protocol === 'chrome:') return;
 
+  // Don't run on the dashboard (localhost:3000) so we don't block our own metrics
+  if (window.location.hostname === 'localhost' && window.location.port === '3000') return;
+
   // Prevent double injection
   if (document.getElementById('reverse-turing-test-host')) return;
 
+  // Pre-cache URL synchronously — getURL throws after context invalidation
+  let CSS_URL = '';
+  try { CSS_URL = chrome.runtime.getURL('styles/overlay.css'); } catch (_) { return; }
+
   async function checkAndInject() {
     try {
-      const state = await chrome.storage.local.get(['captchaState', 'banReason']);
+      const state = await chrome.storage.local.get(['captchaState', 'banReason', 'whitelistedDomains']);
       const status = state.captchaState || 'not_started';
+      const whitelistedDomains = state.whitelistedDomains || [];
 
-      if (status === 'passed' || status === 'disabled') return;
+      // Check if current hostname is whitelisted
+      const currentHost = window.location.hostname.replace(/^www\./, '');
+      const isWhitelisted = whitelistedDomains.some(domain => currentHost.includes(domain));
+
+      if (isWhitelisted) {
+        console.log('[Reverse Turing Test] Domain is whitelisted. Skipping CAPTCHA.');
+        return;
+      }
+
+      if (status === 'passed' || status === 'disabled') return; // Skip injection
 
       // Create Shadow DOM host
       const host = document.createElement('div');
@@ -28,7 +45,7 @@
         // Show permanent ban screen
         const link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = chrome.runtime.getURL('styles/overlay.css');
+        link.href = CSS_URL;
         shadow.appendChild(link);
 
         await new Promise(r => { link.onload = r; link.onerror = r; });
@@ -63,25 +80,22 @@
   }
 
   // Listen for state changes (e.g., passed from another tab)
-  chrome.storage.onChanged.addListener((changes) => {
-    if (changes.captchaState) {
-      const newState = changes.captchaState.newValue;
-      const host = document.getElementById('reverse-turing-test-host');
-      if (newState === 'passed' && host) {
-        host.style.transition = 'opacity 0.5s';
-        host.style.opacity = '0';
-        setTimeout(() => host.remove(), 500);
+  try {
+    chrome.storage.onChanged.addListener((changes) => {
+      if (changes.captchaState) {
+        const newState = changes.captchaState.newValue;
+        const host = document.getElementById('reverse-turing-test-host');
+        if ((newState === 'passed' || newState === 'disabled') && host) {
+          host.style.transition = 'opacity 0.5s';
+          host.style.opacity = '0';
+          setTimeout(() => host.remove(), 500);
+        }
+        if (newState === 'not_started') {
+          window.location.reload();
+        }
       }
-      if (newState === 'not_started') {
-        window.location.reload();
-      }
-      if (newState === 'disabled' && host) {
-        host.style.transition = 'opacity 0.3s';
-        host.style.opacity = '0';
-        setTimeout(() => host.remove(), 300);
-      }
-    }
-  });
+    });
+  } catch (_) {}
 
   // Go
   if (document.readyState === 'loading') {

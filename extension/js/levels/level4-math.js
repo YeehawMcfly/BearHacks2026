@@ -27,7 +27,7 @@
     startTime = performance.now();
 
     container.innerHTML = `
-      <div class="rt-challenge-title" style="color:var(--accent-red)">LEVEL 4 — IMPOSSIBLE VERIFICATION</div>
+      <div class="rt-challenge-title" style="color:var(--accent-red)">IMPOSSIBLE VERIFICATION</div>
       <div class="rt-challenge-subtitle">Solve this equation. You have <strong style="color:var(--accent-red)">${TIME_LIMIT} seconds</strong>.</div>
       <div class="rt-challenge-content">
         <div class="rt-math-equation" id="rt-math">${equation.display}</div>
