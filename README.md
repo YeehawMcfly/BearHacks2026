@@ -9,6 +9,9 @@ SGT. CAPTCHA is a Chrome extension that acts as an unhinged AI Drill Sergeant. U
 
 If you are too slow and dumb, you are a bot. If you are too fast and perfect, you are an AI. To pass, you must be a flawed, messy human.
 
+## Demo Video
+[![SGT. CAPTCHA Demo](https://markdown-videos-api.jorgenkh.no/url?url=https%3A%2F%2Fyoutu.be%2FAE0BvK-AbLo%3Fsi%3D9Fc0lkFDrYpcbgA-)](https://youtu.be/AE0BvK-AbLo?si=9Fc0lkFDrYpcbgA-)
+
 ## Why build this?
 The original purpose of CAPTCHAs was to prevent bots from accessing the internet. Today, things like social media and online shopping attract humans like they're moths to a flame. The problem is that these platforms are designed to be addictive, and they're often used for mindless scrolling and wasted time. SGT. CAPTCHA is designed to be an interactive anti-addiction tool. It ensures your brain and body are not being lazy before you access the most addictive parts of the web.
 
