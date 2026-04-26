@@ -8,19 +8,9 @@ import { buildLevel1Remote } from './level1Remote.mjs';
 import { TOPIC_IDS } from './level1Topics.mjs';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow Chrome extensions, localhost dev, and the deployed URL
-    if (!origin || origin.startsWith('chrome-extension://') || origin.includes('localhost') || origin.includes('127.0.0.1')) {
-      callback(null, true);
-    } else {
-      callback(null, true); // Allow all origins (public API)
-    }
-  },
-  credentials: true
-}));
+app.use(cors());
 app.use(express.json());
 app.use(express.static('public')); // Serve dashboard.html
 
