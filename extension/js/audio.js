@@ -11,15 +11,37 @@
 
   let currentUtterance = null; // For Web Speech API fallback
 
-  function playUrl(url) {
+  function revokeIfBlob(url) {
+    if (typeof url === 'string' && url.startsWith('blob:')) {
+      try { URL.revokeObjectURL(url); } catch (_) {}
+    }
+  }
+
+  /** @param {string|null} fallbackText - if play() fails (autoplay) or decode errors, use Web Speech */
+  function playUrl(url, fallbackText = null) {
     return new Promise((resolve) => {
       stop(); // kill anything playing
       const audio = new Audio(url);
       currentAudio = audio;
       audio.volume = 0.85;
-      audio.onended = () => { if (currentAudio === audio) currentAudio = null; resolve(audio); };
-      audio.onerror = () => { if (currentAudio === audio) currentAudio = null; resolve(null); };
-      audio.play().catch(() => { currentAudio = null; resolve(null); });
+      const finishFallback = () => {
+        revokeIfBlob(url);
+        if (fallbackText) playFallbackSpeech(fallbackText).then(resolve);
+        else resolve(null);
+      };
+      audio.onended = () => {
+        if (currentAudio === audio) currentAudio = null;
+        revokeIfBlob(url);
+        resolve(audio);
+      };
+      audio.onerror = () => {
+        if (currentAudio === audio) currentAudio = null;
+        finishFallback();
+      };
+      audio.play().catch(() => {
+        if (currentAudio === audio) currentAudio = null;
+        finishFallback();
+      });
     });
   }
 
@@ -52,15 +74,25 @@
   // Returns a promise that resolves when audio STARTS playing (url is ready).
   // The caller can await the returned promise then await audio.onended if needed.
   async function speak(text, emotion = 'angry') {
-    // Cancel any currently playing audio immediately
     stop();
     const url = await window.ReverseTest.API.getTTS(text, emotion).catch(() => null);
     if (!url) {
-      // Fallback to robotic browser voice if ElevenLabs fails
       return playFallbackSpeech(text);
     }
-    // Don't await playback — caller decides
-    return playUrl(url);
+    return playUrl(url, text);
+  }
+
+  /**
+   * Play TTS from a getTTS() promise (e.g. started during a click so fetch runs early).
+   * After await, stops SFX and plays — still passes fallbackText if decode/play fails.
+   */
+  async function playPreparedTts(ttsPromise, fallbackText) {
+    const url = await ttsPromise.catch(() => null);
+    stop();
+    if (!url) {
+      return playFallbackSpeech(fallbackText);
+    }
+    return playUrl(url, fallbackText);
   }
 
   // Waits for the current audio to finish (if any)
@@ -90,24 +122,57 @@
     return currentAudio ? (currentAudio.duration || 0) : 0;
   }
 
-  // Simple beep via Web Audio API as fallback
-  function beep(freq, duration, type = 'square') {
+  // One shared context for all SFX — creating a new AudioContext per beep hits browser limits and
+  // triggers "The AudioContext encountered an error from the audio device or the WebAudio renderer."
+  let sfxContext = null;
+
+  function getSfxContext() {
+    if (sfxContext && sfxContext.state !== 'closed') return sfxContext;
+    sfxContext = null;
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = type;
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(); osc.stop(ctx.currentTime + duration);
-    } catch (_) {}
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      sfxContext = new AC();
+    } catch (_) {
+      sfxContext = null;
+    }
+    return sfxContext;
+  }
+
+  function ensureSfxRunning(ctx) {
+    if (!ctx || ctx.state === 'closed') return Promise.resolve();
+    if (ctx.state === 'suspended') {
+      return ctx.resume().catch(() => {});
+    }
+    return Promise.resolve();
+  }
+
+  /** Fire-and-forget tone; uses shared context + resume (required after autoplay policies). */
+  function beep(freq, duration, type = 'square') {
+    const ctx = getSfxContext();
+    if (!ctx) return;
+    ensureSfxRunning(ctx).then(() => {
+      try {
+        if (!sfxContext || sfxContext.state === 'closed') return;
+        const c = sfxContext;
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        const t0 = c.currentTime;
+        gain.gain.setValueAtTime(0.12, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + Math.max(0.02, duration));
+        osc.connect(gain).connect(c.destination);
+        osc.start(t0);
+        osc.stop(t0 + duration);
+      } catch (_) {}
+    });
   }
 
   window.ReverseTest = window.ReverseTest || {};
   window.ReverseTest.Audio = {
     speak,
+    playPreparedTts,
     stop,
     waitForAudio,
     currentDuration,

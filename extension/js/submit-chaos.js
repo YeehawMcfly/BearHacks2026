@@ -12,6 +12,8 @@
   let container = null;
   let dodgeCount = 0;
   let resolved = false;
+  /** Window-level tracking — mousemove on #rt-chaos-area missed hovers in some shadow/stacking cases */
+  let removeDodgePointerTracking = null;
   const MAX_DODGES = 5;
 
   const DODGE_TAUNTS = [
@@ -21,6 +23,9 @@
     "Are you even TRYING?!",
     "LAST CHANCE, WORM!"
   ];
+
+  const JK_TTS_LINE =
+    "Just kidding. You may proceed. But I will be watching. ALWAYS watching.";
 
   function render(shadow, cont) {
     shadowRoot = shadow;
@@ -43,16 +48,17 @@
     const btn = shadow.getElementById('rt-final-btn');
     const area = shadow.getElementById('rt-chaos-area');
 
-    // Mouse proximity detection — button flees
+    // Mouse proximity — listen on window so moves over the button always register (shadow DOM / overlay quirks)
     let fleeing = false;
-    area.addEventListener('mousemove', (e) => {
+    const onPointerMove = (e) => {
       if (fleeing || resolved || dodgeCount >= MAX_DODGES) return;
+      if (!btn?.isConnected || !area?.isConnected) return;
       const rect = btn.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
       const dx = e.clientX - cx;
       const dy = e.clientY - cy;
-      const dist = Math.sqrt(dx*dx + dy*dy);
+      const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist < 100) {
         fleeing = true;
@@ -69,7 +75,12 @@
           }
         }, 400);
       }
-    });
+    };
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    removeDodgePointerTracking = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      removeDodgePointerTracking = null;
+    };
 
     btn.addEventListener('click', (e) => {
       if (resolved) return;
@@ -79,7 +90,9 @@
       }
       // They found the real button among decoys!
       e.preventDefault();
-      startJustKidding();
+      // Start ElevenLabs fetch on this click (fresh user gesture + time to download during fake ban)
+      const jkTtsPromise = window.ReverseTest.API.getTTS(JK_TTS_LINE, 'sinister');
+      startJustKidding(jkTtsPromise);
     });
   }
 
@@ -131,6 +144,7 @@
   }
 
   function startDecoyPhase(area, realBtn) {
+    if (removeDodgePointerTracking) removeDodgePointerTracking();
     const areaRect = area.getBoundingClientRect();
     const w = areaRect.width;
     const h = areaRect.height;
@@ -190,7 +204,8 @@
     }, 2000);
   }
 
-  function startJustKidding() {
+  function startJustKidding(jkTtsPromise) {
+    if (removeDodgePointerTracking) removeDodgePointerTracking();
     // Clear everything from the area
     container.innerHTML = `
       <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:350px;gap:20px;">
@@ -215,7 +230,7 @@
     window.ReverseTest.Audio.sfx.alarm();
 
     // Wait 2.5 seconds, then reveal it's a joke
-    setTimeout(() => {
+    setTimeout(async () => {
       const stamp = shadowRoot.getElementById('rt-jk-stamp');
       const reason = shadowRoot.getElementById('rt-jk-reason');
 
@@ -232,7 +247,9 @@
       }
 
       window.ReverseTest.Audio.sfx.success();
-      window.ReverseTest.Audio.speak("Just kidding. You may proceed. But I will be watching. ALWAYS watching.", 'sinister');
+      // Let earcon finish, then play Adam (prefetched on winning click) — play() fallback if browser blocks delayed audio
+      await new Promise((r) => setTimeout(r, 450));
+      await window.ReverseTest.Audio.playPreparedTts(jkTtsPromise, JK_TTS_LINE);
 
       // Show the REAL final button after a beat
       setTimeout(() => {
@@ -262,7 +279,11 @@
     }, 2500);
   }
 
-  function cleanup() { container = null; resolved = false; }
+  function cleanup() {
+    if (removeDodgePointerTracking) removeDodgePointerTracking();
+    container = null;
+    resolved = false;
+  }
 
   window.ReverseTest = window.ReverseTest || {};
   window.ReverseTest.SubmitChaos = { render, cleanup };
