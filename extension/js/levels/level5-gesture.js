@@ -82,10 +82,24 @@
         <div class="text-center mt-8" style="font-size:11px;color:var(--text-dim);">
           ${currentGesture.hint} · Skeleton overlay powered by MediaPipe · 100% local
         </div>
+        <div class="text-center mt-6">
+          <button type="button" class="rt-submit-btn" id="rt-gesture-skip" style="font-size:13px;padding:10px 28px;">
+            SKIP (+15 suspicion)
+          </button>
+        </div>
       </div>
     `;
 
     setupIframe();
+    const skipBtn = shadowRoot.getElementById('rt-gesture-skip');
+    if (skipBtn) {
+      skipBtn.addEventListener('click', () => {
+        window.ReverseTest.Goldilocks.addSuspicion(15);
+        container.dispatchEvent(new CustomEvent('level-complete', {
+          detail: { passed: true, speedFactor: 0.3, perfect: false, skipped: true }
+        }));
+      });
+    }
   }
 
   function setupIframe() {
@@ -125,20 +139,6 @@
           if (statusEl) {
             statusEl.textContent = `Camera error: ${data.message}`;
             statusEl.style.color = 'var(--accent-red)';
-          }
-          // Show skip button
-          if (loadingEl) {
-            loadingEl.innerHTML += `
-              <button class="rt-submit-btn" id="rt-gesture-skip" style="margin-top:12px;font-size:13px;">
-                SKIP (+15 suspicion)
-              </button>`;
-            const skipBtn = shadowRoot.getElementById('rt-gesture-skip');
-            if (skipBtn) skipBtn.addEventListener('click', () => {
-              window.ReverseTest.Goldilocks.addSuspicion(15);
-              container.dispatchEvent(new CustomEvent('level-complete', {
-                detail: { passed: true, speedFactor: 0.3, perfect: false, skipped: true }
-              }));
-            });
           }
           break;
 

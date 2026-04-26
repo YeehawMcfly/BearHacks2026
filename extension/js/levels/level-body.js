@@ -88,10 +88,24 @@
         <div class="text-center mt-8" style="font-size:11px;color:var(--text-dim);">
           ${currentAction.hint} · Full body skeleton tracking · 100% local
         </div>
+        <div class="text-center mt-6">
+          <button type="button" class="rt-submit-btn" id="rt-body-skip" style="font-size:13px;padding:10px 28px;">
+            SKIP (+20 suspicion)
+          </button>
+        </div>
       </div>
     `;
 
     setupIframe();
+    const skipBtn = shadowRoot.getElementById('rt-body-skip');
+    if (skipBtn) {
+      skipBtn.addEventListener('click', () => {
+        window.ReverseTest.Goldilocks.addSuspicion(20);
+        container.dispatchEvent(new CustomEvent('level-complete', {
+          detail: { passed: true, speedFactor: 0.3, perfect: false, skipped: true }
+        }));
+      });
+    }
   }
 
   function setupIframe() {
@@ -123,23 +137,21 @@
           }, 300);
           break;
         case 'camera-error':
-        case 'error':
-          if (loadingEl) {
-            loadingEl.innerHTML = `
-              <div class="rt-gesture-loading-text" style="color:var(--accent-red)">
-                BODY SCANNER OFFLINE<br>
-                <span style="font-size:11px;color:var(--text-dim)">${data.message}</span>
-              </div>
-              <button class="rt-submit-btn" id="rt-body-skip" style="margin-top:12px;font-size:13px;">SKIP (+20 suspicion)</button>`;
-            const skipBtn = shadowRoot.getElementById('rt-body-skip');
-            if (skipBtn) skipBtn.addEventListener('click', () => {
-              window.ReverseTest.Goldilocks.addSuspicion(20);
-              container.dispatchEvent(new CustomEvent('level-complete', {
-                detail: { passed: true, speedFactor: 0.3, perfect: false, skipped: true }
-              }));
-            });
+        case 'error': {
+          const msg = data.message || 'Scanner unavailable';
+          if (statusEl) {
+            statusEl.textContent = msg;
+            statusEl.style.color = 'var(--accent-red)';
+          }
+          const loadHead = loadingEl?.querySelector('.rt-gesture-loading-text');
+          if (loadHead) {
+            loadHead.innerHTML = `
+              BODY SCANNER OFFLINE<br>
+              <span style="font-size:11px;color:var(--text-dim)">${msg}</span>`;
+            loadHead.style.color = 'var(--accent-red)';
           }
           break;
+        }
         case 'progress':
           updateProgress(data);
           break;
