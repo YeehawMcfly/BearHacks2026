@@ -11,6 +11,9 @@
  *   Fallback text used if server is unreachable.
  */
 (function () {
+  /** Set to `false` before release — opens overlay directly on final submit-chaos phase (military UI). */
+  const SKIP_TO_SUBMIT_PHASE_FOR_TESTING = false;
+
   const LEVELS = [
     { key: 'Level1',      name: 'IMAGE SELECT',   module: () => window.ReverseTest.Level1 },
     { key: 'Level2',      name: 'WORD VERIFY',    module: () => window.ReverseTest.Level2 },
@@ -222,6 +225,33 @@
     }
   }
 
+  /** Military chrome without the long glitch/matrix transition (used by transition + test shortcut). */
+  function applyMilitaryThemeShell() {
+    const overlay = shadowRoot.getElementById('rt-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('rt-theme-normal', 'rt-theme-glitching');
+    overlay.classList.add('rt-theme-military');
+    currentTheme = 'military';
+
+    const headerNormal = shadowRoot.getElementById('rt-header-normal');
+    const headerMil = shadowRoot.getElementById('rt-header-military');
+    const threatPanel = shadowRoot.getElementById('rt-threat-panel');
+    const sgtPanel = shadowRoot.getElementById('rt-sergeant');
+    const normalFooter = shadowRoot.getElementById('rt-normal-footer');
+
+    if (headerNormal) headerNormal.style.display = 'none';
+    if (headerMil) headerMil.style.display = 'flex';
+    if (threatPanel) threatPanel.style.display = 'flex';
+    if (sgtPanel) sgtPanel.style.display = 'flex';
+    if (normalFooter) normalFooter.style.display = 'none';
+  }
+
+  function jumpToSubmitPhaseForTesting() {
+    applyMilitaryThemeShell();
+    currentLevel = LEVELS.length;
+    startSubmitPhase();
+  }
+
   // ── THEME TRANSITION ──
   async function playTransition() {
     const overlay = shadowRoot.getElementById('rt-overlay');
@@ -287,24 +317,7 @@
     overlay.classList.remove('rt-theme-flash');
 
     // Phase 4: Swap to military theme
-    overlay.classList.remove('rt-theme-normal', 'rt-theme-glitching');
-    overlay.classList.add('rt-theme-military');
-    currentTheme = 'military';
-
-    // Show military UI elements
-    const headerNormal = shadowRoot.getElementById('rt-header-normal');
-    const headerMil = shadowRoot.getElementById('rt-header-military');
-    const threatPanel = shadowRoot.getElementById('rt-threat-panel');
-    const progressPanel = shadowRoot.getElementById('rt-progress-panel');
-    const sgtPanel = shadowRoot.getElementById('rt-sergeant');
-    const normalFooter = shadowRoot.getElementById('rt-normal-footer');
-
-    if (headerNormal) headerNormal.style.display = 'none';
-    if (headerMil) headerMil.style.display = 'flex';
-    if (threatPanel) threatPanel.style.display = 'flex';
-    // if (progressPanel) progressPanel.style.display = 'block'; // Hidden for immersion
-    if (sgtPanel) sgtPanel.style.display = 'flex';
-    if (normalFooter) normalFooter.style.display = 'none';
+    applyMilitaryThemeShell();
 
     // Phase 4: SGT intro — voice and text stay in sync, wait for each line to finish
     window.ReverseTest.Audio.sfx.alarm();
@@ -430,9 +443,12 @@
   }
 
   async function runIntro() {
-    // In normal theme, just show a subtle status message
-    showNormalText("Additional verification required. Please complete the following.");
     safeSet({ captchaState: 'in_progress', sessionStart: Date.now() });
+    if (SKIP_TO_SUBMIT_PHASE_FOR_TESTING) {
+      jumpToSubmitPhaseForTesting();
+      return;
+    }
+    showNormalText("Additional verification required. Please complete the following.");
     await new Promise(r => setTimeout(r, 800));
     startLevel(0);
   }
@@ -672,9 +688,11 @@
     shadow.prepend(link);
     await new Promise(r => { link.onload = r; link.onerror = r; });
 
-    // Preload camera while decoy is showing — by the time user reaches camera levels,
-    // getUserMedia permission is already granted and the canvas is warm
-    preloadCamera();
+    if (!SKIP_TO_SUBMIT_PHASE_FOR_TESTING) {
+      // Preload camera while decoy is showing — by the time user reaches camera levels,
+      // getUserMedia permission is already granted and the canvas is warm
+      preloadCamera();
+    }
 
     await new Promise((resolve) => {
       window.ReverseTest.DecoyCaptcha.run(shadow, async () => {
