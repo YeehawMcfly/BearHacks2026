@@ -8,7 +8,7 @@
  * worker fetches as chrome-extension:// — allowed with host_permissions.
  */
 
-const LOCAL_SERVER = 'http://127.0.0.1:3000';
+const LOCAL_SERVER = 'https://sgt-captcha-server.onrender.com';
 
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);

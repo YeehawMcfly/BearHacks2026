@@ -7,6 +7,7 @@
   "host_permissions": [
     "http://localhost:3000/*",
     "http://127.0.0.1:3000/*",
+    "https://sgt-captcha-server.onrender.com/*",
     "https://images.pexels.com/*",
     "https://loremflickr.com/*",
     "https://*.staticflickr.com/*"
